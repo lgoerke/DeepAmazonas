@@ -2,9 +2,11 @@ import random
 import csv
 import sys
 import os
+import time
 import numpy as np
 from PIL import Image
 from skimage import io
+import georasters as gr
 from keras.preprocessing.image import ImageDataGenerator
 
 class Validation_splitter:
@@ -31,10 +33,13 @@ class CSV_line_reader:
 
 def load_single_tif(dir,file_path):
     open_path = os.path.join(dir, file_path + '.tif')
-    imarray = io.imread(open_path)
+    #imarray = io.imread(open_path)
+    
     #im = Image.open(open_path)
     #imarray = numpy.array(im)
-    return calibrate_image(imarray)
+    imarray = gr.from_file(open_path)
+    im = np.reshape(imarray.raster,(4,256,256))
+    return np.transpose(im,(1,2,0))
 
 def calibrate_image(image):
     # TODO
@@ -74,14 +79,43 @@ def train_generator(data_dir, reader, splitter, batch_size):
                 break
                  
 
+
+
 def val_generator(data_dir, reader, splitter, batch_size):
+    val_idx = splitter.val_idx
+
+    start = 0
+    while True:
+        idx = val_idx[start:(start+batch_size)%len(val_idx)]
+        start += batch_size 
+        if start > len(val_idx): start = 0
+
+        d = []
+        l = []
+
+        for i in idx:
+            d.append(load_single_tif(data_dir,reader.read_line_csv(i)[0]))
+            l.append(reader.read_line_csv(i)[1])
+
+        yield (np.array(d),np.array(l))
+
+
+    num = 500 
+    while True:
+        sampled_idx = np.random.choice(val_idx,size=num)
+        d = []
+        l = []
+
+        for i in sampled_idx:
+            d.append(load_single_tif(data_dir,reader.read_line_csv(i)[0]))
+            l.append(reader.read_line_csv(i)[1])
+        d = np.array(d)
+        l = np.array(l)
+
+        cnt = 0
+        for X_batch, Y_batch in datagen.flow(d,l, batch_size=batch_size):
+            yield (X_batch, Y_batch)
+            cnt+=batch_size   
+            if cnt == num:
+                break
     
-    # np.random.shuffle(val_indx)
-
-    # start = 0
-    # while True:
-    #     indx = val_indx[start:(start+batch_size)%len(val_indx)]
-    #     start += batch_size 
-    #     if start > len(val_indx): start = 0
-
-    #     yield (data[indx.sort()], labels[indx.sort()])
