@@ -7,7 +7,7 @@
 * Log into kaggle
 * In browser go to tool/add-ons and export cookies
 * open terminal and navigate to cookies.txt
-* scp gdemo'you-user'@cartesius.surfsara.nl:.
+* scp cookies.txt gdemo'you-user'@cartesius.surfsara.nl:.
 * ssh gdemo'you-user'@cartesius.surfsara.nl
 * On kaggle go to Data
 * Click on dataset you want to download
