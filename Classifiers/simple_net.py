@@ -42,11 +42,11 @@ class SimpleNet(Classifier_base):
 	def __init__(self, shape=(224, 224), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam'):
 		
 		self.shape = shape
-        self.n_classes = n_classes
-        self.nb_epoch = nb_epoch
-        self.lr = lr
-        self.optimizer = optimizer
-        self.batch_size = batch_size
+        	self.n_classes = n_classes
+        	self.nb_epoch = nb_epoch
+        	self.lr = lr
+        	self.optimizer = optimizer
+        	self.batch_size = batch_size
 
 		self.build()
 

@@ -19,8 +19,6 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 import cv2
 from skimage import io
 import matplotlib.pyplot as plt
-from PIL import Image
-import gdal
 from tqdm import tqdm
 
 from sklearn.cross_validation import train_test_split
