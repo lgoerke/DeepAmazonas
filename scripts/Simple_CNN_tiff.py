@@ -35,11 +35,11 @@ x_test = []
 y_train = []
 
 #n_train_images = 40479
-df_train = pd.read_csv('../data/train_v2.csv')
+df_train = pd.read_csv('input/train_v2.csv')
 #df_train = pd.read_csv('../data/train_v2.csv', nrows=n_train_images)
 #df_train = pd.read_csv('../data/train_100.csv')
 #n_test_images = 2000
-df_test = pd.read_csv('../data/sample_submission_v2.csv')
+df_test = pd.read_csv('input/sample_submission_v2.csv')
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 labels = list(set(flatten([l.split(' ') for l in df_train['tags'].values])))
@@ -84,7 +84,7 @@ resize_to = (64,64)
 
 #for f, tags in tqdm(df_train.values[:18000], miniters=1000):
 for f, tags in tqdm(df_train.values, miniters=1000):
-    img = io.imread('../data/train-tif-v2/{}.tif'.format(f))
+    img = io.imread('input/train-tif-v2/{}.tif'.format(f))
     #img = io.imread('../data/train-tif_100/{}.tif'.format(f))
     targets = np.zeros(17)
     for t in tags.split(' '):
@@ -118,7 +118,7 @@ if check_dependencies:
 #    yjpg_train.append(targets)
 
 for f, tags in tqdm(df_test.values, miniters=1000):
-    img = io.imread('../data/test-tif-v2/{}.tif'.format(f))
+    img = io.imread('input/test-tif-v2/{}.tif'.format(f))
     #img = io.imread('../data/test-tif_100/{}.tif'.format(f))
     #img = cv2.imread('../data/test-jpg/{}.jpg'.format(f))
     x_test.append(cv2.resize(img, resize_to))

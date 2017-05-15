@@ -55,7 +55,7 @@ def main(args):
 
 	
 	print('validating')
-	val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True):
+	val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True)
 	p_valid = classifier.predict(val_data)
 
 	print('validation loss: {}'.format(fbeta_score(val_labels, np.array(p_valid) > 0.2, beta=2, average='samples')))
