@@ -31,7 +31,7 @@ class CSV_line_reader:
     def read_line_csv(self,line_num):
         return self.content[line_num][0], self.content[line_num][1] 
 
-def load_single_tif(dir,file_path):
+def load_single_tif(dir,file_path,img_size,to_255=False):
     open_path = os.path.join(dir, file_path + '.tif')
     #imarray = io.imread(open_path)
     
@@ -39,13 +39,41 @@ def load_single_tif(dir,file_path):
     #imarray = numpy.array(im)
     imarray = gr.from_file(open_path)
     im = np.reshape(imarray.raster,(4,256,256))
-    return np.transpose(im,(1,2,0))
+    im = np.transpose(im,(1,2,0))
+
+    if to_255:
+        scaler = MinMaxScaler(feature_range=(0, 255))
+        rescaleIMG = scaler.fit_transform(im)
+        im = im.astype(np.uint8)
+    else:
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        rescaleIMG = scaler.fit_transform(im)
+        im = im.astype(np.float32)
+
+    return cv2.resize(im, (img_size, img_size))
+
+def load_tif_as_rgb(dir,file_path,img_size,to_255=False):
+    open_path = os.path.join(dir, file_path + '.tif')
+    img = io.imread(open_path)
+    img_rgb = get_rgb(img, [2, 1, 0]) # RGB
+    # rescaling to 0-255 range - uint8 for display
+    rescaleIMG = np.reshape(img_rgb, (-1, 1))
+    if to_255:
+        scaler = MinMaxScaler(feature_range=(0, 255))
+        rescaleIMG = scaler.fit_transform(rescaleIMG) 
+        img_scaled = (np.reshape(rescaleIMG, img_rgb.shape)).astype(np.uint8)
+    else:
+        scaler = MinMaxScaler(feature_range=(0, 1))
+        rescaleIMG = scaler.fit_transform(rescaleIMG)
+        img_scaled = (np.reshape(rescaleIMG, img_rgb.shape)).astype(np.float32)
+    
+    return cv2.resize(img_scaled, (img_size, img_size))
 
 def calibrate_image(image):
     # TODO
     return image
 
-def train_generator(data_dir, reader, splitter, batch_size):
+def train_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb=False):
     train_idx = splitter.train_idx
 
     datagen = ImageDataGenerator(
@@ -64,7 +92,10 @@ def train_generator(data_dir, reader, splitter, batch_size):
         l = []
 
         for i in sampled_idx:
-            d.append(load_single_tif(data_dir,reader.read_line_csv(i)[0]))
+            if load_rgb:
+                d.append(load_tif_as_rgb(data_dir,reader.read_line_csv(i)[0],img_size))
+            else:
+                d.append(load_single_tif(data_dir,reader.read_line_csv(i)[0],img_size))
             l.append(reader.read_line_csv(i)[1])
         d = np.array(d)
         l = np.array(l)
@@ -81,7 +112,7 @@ def train_generator(data_dir, reader, splitter, batch_size):
 
 
 
-def val_generator(data_dir, reader, splitter, batch_size):
+def val_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb=False):
     val_idx = splitter.val_idx
 
     start = 0
@@ -94,7 +125,10 @@ def val_generator(data_dir, reader, splitter, batch_size):
         l = []
 
         for i in idx:
-            d.append(load_single_tif(data_dir,reader.read_line_csv(i)[0]))
+            if load_rgb:
+                d.append(load_tif_as_rgb(data_dir,reader.read_line_csv(i)[0],img_size))
+            else:
+                d.append(load_single_tif(data_dir,reader.read_line_csv(i)[0],img_size))
             l.append(reader.read_line_csv(i)[1])
 
         yield (np.array(d),np.array(l))
