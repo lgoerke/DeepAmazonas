@@ -50,7 +50,7 @@ def main(args):
     reader = CSV_line_reader('input/train_v2.csv')
     tg = data.train_generator('input/train-tif-v2', reader, splitter, batch_size, img_size=size, load_rgb=True)
     vg = data.val_generator('input/train-tif-v2', reader, splitter, batch_size, img_size=size, load_rgb=True)
-    
+
     print('start training: ')
     classifier.fit(tg, vg, ((1-val_split) * N_SAMPLES, val_split * N_SAMPLES))
 

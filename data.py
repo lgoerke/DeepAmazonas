@@ -192,7 +192,7 @@ def val_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb
     val_idx = splitter.val_idx
 
     start = 0
-    num = 500
+    num = 200
     times = int(num/batch_size)
     num = times * batch_size
     while True:
@@ -200,7 +200,7 @@ def val_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb
         #start += batch_size 
         if start+num > len(val_idx):
             end = start+num - len(val_idx)
-            select = np.concatenate(np.arange(start,len(val_idx)),np.arange(end)).astype(int)
+            select = np.concatenate([np.arange(start,len(val_idx)).astype(int),np.arange(end).astype(int)])
         else: 
             select = np.arange(start,start+num).astype(int)
         idx = val_idx[select]
