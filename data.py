@@ -11,11 +11,15 @@ from spectral import *
 from skimage import io as skio
 from sklearn.preprocessing import MinMaxScaler
 import cv2
+from tqdm import tqdm
+from os import listdir
+from os.path import isfile, join
 
 class Validation_splitter:
     '''
         Training/Validation data split utility class. Holds array with indices
-        of training and validation data as defined by percentage and csv to train data
+        of training and validation data as defined by percentage (percentage of
+        validation data) and csv to train data
     '''
     def __init__(self,csv_path,percentage):
         with open(csv_path, 'r') as csvfile:
@@ -23,8 +27,8 @@ class Validation_splitter:
             data = list(reader)
             row_nums = np.arange(len(data))
             np.random.shuffle(row_nums)
-            self.train_idx = row_nums[:int(len(row_nums)*percentage)]
-            self.val_idx = row_nums[int(len(row_nums)*percentage):]
+            self.train_idx = row_nums[int(len(row_nums)*percentage):]
+            self.val_idx = row_nums[:int(len(row_nums)*percentage)]
 
 class CSV_line_reader:
     def __init__(self,csv_path):
@@ -76,9 +80,33 @@ def load_tif_as_rgb(dir,file_path,img_size,to_255=False):
     
     return cv2.resize(img_scaled, (img_size, img_size))
 
-def calibrate_image(image):
-    # TODO
-    return image
+def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
+    val_idx = splitter.val_idx
+    d = []
+    l = []
+
+    for i in tqdm(val_idx, desc='Loading validation set'):
+        if load_rgb:
+            d.append(load_tif_as_rgb(data_dir,reader.read_line_csv(i)[0],img_size))
+        else:
+            loaded, _ = load_single_tif(data_dir,reader.read_line_csv(i)[0],img_size)
+            d.append(loaded)
+        l.append(reader.read_line_csv(i)[1])
+
+    return d, l
+
+def get_all_test(data_dir, img_size=256, load_rgb=False):
+    files = [os.path.splitext(f)[0] for f in listdir(data_dir) if isfile(join(data_dir, f))]
+    d = []
+
+    for f in tqdm(files, desc='Loading test set'):
+        if load_rgb:
+            d.append(load_tif_as_rgb(data_dir,f,img_size))
+        else:
+            loaded, _ = load_single_tif(data_dir,f,img_size)
+            d.append(loaded)
+
+    return d
 
 def train_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb=False):
     train_idx = splitter.train_idx
