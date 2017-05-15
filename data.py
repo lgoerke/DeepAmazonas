@@ -25,7 +25,8 @@ class Validation_splitter:
         with open(csv_path, 'r') as csvfile:
             reader = csv.reader(csvfile,delimiter = ",")
             data = list(reader)
-            row_nums = np.arange(len(data))
+            ## Don't read header (-1)
+            row_nums = np.arange(len(data)-1)
             np.random.shuffle(row_nums)
             self.train_idx = row_nums[int(len(row_nums)*percentage):]
             self.val_idx = row_nums[:int(len(row_nums)*percentage)]
@@ -36,7 +37,8 @@ class CSV_line_reader:
             self.content = list(csv.reader(csvfile))
 
     def read_line_csv(self,line_num):
-        return self.content[line_num][0], self.content[line_num][1] 
+        ## Because header was deleted in indices, read next line always
+        return self.content[line_num+1][0], self.content[line_num+1][1] 
 
 def load_single_tif(dir,file_path,img_size,to_255=False):
     '''
