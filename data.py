@@ -53,7 +53,8 @@ class Validation_splitter:
             print(self.num_folds)
             self.fold_size = int(len(self.row_nums)*percentage)
             print(self.fold_size)
-    def nextFold(self):
+    
+    def next_fold(self):
         if self.num_folds > self.num_fold:
             if self.num_folds > self.num_fold + 1:
                 select = np.arange(self.num_fold*self.fold_size,self.num_fold*self.fold_size + self.fold_size)           

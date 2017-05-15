@@ -45,10 +45,12 @@ def main(args):
     classifier = SimpleNet((size,size,3), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
 
     splitter = Validation_splitter('input/train_v2.csv', val_split)
+    splitter.next_fold()
+
     reader = CSV_line_reader('input/train_v2.csv')
     tg = data.train_generator('input/train-tif-v2', reader, splitter, batch_size, img_size=size, load_rgb=True)
     vg = data.val_generator('input/train-tif-v2', reader, splitter, batch_size, img_size=size, load_rgb=True)
-
+    
     print('start training: ')
     classifier.fit(tg, vg, ((1-val_split) * N_SAMPLES, val_split * N_SAMPLES))
 

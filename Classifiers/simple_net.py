@@ -140,7 +140,7 @@ class SimpleNet(Classifier_base):
         self.model.compile(loss='binary_crossentropy',
                       optimizer=opt,
                       metrics=["accuracy"])
-        print(self.model.summary())
+        
         return self.model
 
 
