@@ -19,6 +19,8 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint
 import cv2
 from skimage import io
 import matplotlib.pyplot as plt
+from PIL import Image
+import gdal
 from tqdm import tqdm
 
 from sklearn.cross_validation import train_test_split
@@ -26,7 +28,6 @@ from sklearn.cross_validation import KFold
 from sklearn.metrics import fbeta_score
 import time
 
-from Classifiers.simple_net import SimpleNet
 
 # Pre-processing the train and test data
 
@@ -35,11 +36,11 @@ x_test = []
 y_train = []
 
 #n_train_images = 40479
-df_train = pd.read_csv('input/train_v2.csv')
+df_train = pd.read_csv('../data/train_v2.csv')
 #df_train = pd.read_csv('../data/train_v2.csv', nrows=n_train_images)
 #df_train = pd.read_csv('../data/train_100.csv')
 #n_test_images = 2000
-df_test = pd.read_csv('input/sample_submission_v2.csv')
+df_test = pd.read_csv('../data/sample_submission_v2.csv')
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 labels = list(set(flatten([l.split(' ') for l in df_train['tags'].values])))
@@ -84,7 +85,7 @@ resize_to = (64,64)
 
 #for f, tags in tqdm(df_train.values[:18000], miniters=1000):
 for f, tags in tqdm(df_train.values, miniters=1000):
-    img = io.imread('input/train-tif-v2/{}.tif'.format(f))
+    img = io.imread('../data/train-tif-v2/{}.tif'.format(f))
     #img = io.imread('../data/train-tif_100/{}.tif'.format(f))
     targets = np.zeros(17)
     for t in tags.split(' '):
@@ -118,7 +119,7 @@ if check_dependencies:
 #    yjpg_train.append(targets)
 
 for f, tags in tqdm(df_test.values, miniters=1000):
-    img = io.imread('input/test-tif-v2/{}.tif'.format(f))
+    img = io.imread('../data/test-tif-v2/{}.tif'.format(f))
     #img = io.imread('../data/test-tif_100/{}.tif'.format(f))
     #img = cv2.imread('../data/test-jpg/{}.jpg'.format(f))
     x_test.append(cv2.resize(img, resize_to))
@@ -235,14 +236,30 @@ for train_index, valid_index in kf:
         
         kfold_weights_path = os.path.join('', 'weights_kfold_' + str(num_fold) + '.h5')
         
+        model = Sequential()
+        model.add(BatchNormalization(input_shape=(resize_to[0], resize_to[1], 4))) # 64
+        model.add(Conv2D(8, 1, 1, activation='relu')) # 64
+        model.add(Conv2D(16, 3, 3, activation='relu')) # 62
+        model.add(MaxPooling2D(pool_size=(2, 2))) # 31
+        model.add(Conv2D(32, 3, 3, activation='relu')) # 29
+        model.add(MaxPooling2D(pool_size=(2, 2))) # 14
+        model.add(Dropout(0.25))
+        model.add(Conv2D(64, 3, 3, activation='relu')) # 12
+        model.add(MaxPooling2D(pool_size=(2, 2))) # 6
+        model.add(Dropout(0.25))
+        model.add(Flatten())
+        model.add(Dense(256, activation='relu'))
+        model.add(Dropout(0.5))
+        model.add(Dense(17, activation='sigmoid'))
 
-        classifier = SimpleNet(resize_to, n_classes=17, nb_epoch = 10, batch_size=128, optimizer='adadelta')
-
+        model.compile(loss='binary_crossentropy', 
+                      optimizer='adam',
+                      metrics=['accuracy'])
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=2, verbose=0),
             ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0)]
         
-        classifier.model.fit(x = X_train, y= Y_train, validation_data=(X_valid, Y_valid),
+        model.fit(x = X_train, y= Y_train, validation_data=(X_valid, Y_valid),
                   batch_size=128,verbose=2, nb_epoch=10,callbacks=callbacks,
                   shuffle=True)
         
