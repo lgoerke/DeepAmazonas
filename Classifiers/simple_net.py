@@ -7,17 +7,21 @@ from keras.layers import (
     Activation,
     Dense,
     Flatten,
+    concatenate,
     Dropout
 )
 from keras.layers.convolutional import (
     Conv2D,
     MaxPooling2D,
-    AveragePooling2D
+    AveragePooling2D,
+    ZeroPadding2D
 )
-from keras.layers.merge import add, Concatenate
+from keras.layers.merge import add#, Concatenate
 from keras.layers.normalization import BatchNormalization
 from keras.regularizers import l2
+from keras import optimizers
 from keras import backend as K
+from keras.callbacks import EarlyStopping
 
 from keras.layers.advanced_activations import PReLU
 
@@ -39,7 +43,7 @@ class SimpleNet(Classifier_base):
     Constructor
     @params: list of all model parameters
     '''
-    def __init__(self, shape=(224, 224), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam'):
+    def __init__(self, shape=(224, 224,3), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam'):
         
         self.shape = shape
         self.n_classes = n_classes
@@ -57,12 +61,13 @@ class SimpleNet(Classifier_base):
         kernel_regularizer = l2(0.0001)
 
         def f(input):
-
+            
+            pad = ZeroPadding2D(padding)(input)
             conv = Conv2D(filters=out_channels, kernel_size=kernel_size,
-                strides=stride, padding=padding,
+                strides=stride,
                 kernel_initializer=kernel_initializer,
-                kernel_regularizer=kernel_regularizer)(input)
-            batch = BatchNormalization(axis=3)(conv)
+                kernel_regularizer=kernel_regularizer)(pad)
+            batch = BatchNormalization()(conv)
             activation = PReLU()(batch)
 
             return activation
@@ -74,9 +79,9 @@ class SimpleNet(Classifier_base):
 
         kernel_initializer="he_normal"
 
-        x = Input(shape=self.shape)
+        input = Input(shape=self.shape)
 
-        x = self.make_block(8, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(8, kernel_size=1, stride=1, padding=0)(input)
         x = self.make_block(8, kernel_size=1, stride=1, padding=0)(x)
         x = self.make_block(8, kernel_size=1, stride=1, padding=0)(x)
 
@@ -96,8 +101,8 @@ class SimpleNet(Classifier_base):
         x = MaxPooling2D(pool_size=2, strides=2, padding="same")(x)
         x = Dropout(0.25)(x)
 
-        outa = AveragePooling2D(x.output_shape)(x)
-        outa = Flatten(outa)
+        outa = AveragePooling2D(self.shape[0] // 4)(x)
+        outa = Flatten()(outa)
 
         x = self.make_block(128, kernel_size=3, stride=1, padding=1)(x)
         x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
@@ -107,20 +112,21 @@ class SimpleNet(Classifier_base):
         x = MaxPooling2D(pool_size=2, strides=2, padding="same")(x)
         x = Dropout(0.50)(x)
 
-        outb = AveragePooling2D(x.output_shape)(x)
-        outb = Flatten(outb)
+        outb = AveragePooling2D(self.shape[0] // 8)(x)
+        outb = Flatten()(outb)
 
-        out = Concatenate([outa, outb], axis=3)
+        out = concatenate([outa, outb], axis=-1)
 
         x = Dense(512,kernel_initializer="he_normal")(out)
-        x = BatchNormalization(axis=3)(x)
+        x = BatchNormalization()(x)
         x = Activation('relu')(x)
 
         x = Dense(512,kernel_initializer="he_normal")(x)
-        x = BatchNormalization(axis=3)(x)
+        x = BatchNormalization()(x)
         x = Activation('relu')(x)
 
-
+        output = Dense(self.n_classes, activation='sigmoid')(x)
+        
         if self.optimizer == 'adam':
             opt = optimizers.adam(lr=self.lr)
         elif self.optimizer == 'adadelta':
@@ -128,12 +134,13 @@ class SimpleNet(Classifier_base):
         else:
             opt=optimizers.SGD(lr=self.lr, momentum=0.9, decay=0.0005, nesterov=True)
 
-        self.model = Dense(self.n_classes, activation='sigmoid')(x)
+
+        self.model = Model(inputs=input, outputs=output)
 
         self.model.compile(loss='binary_crossentropy',
                       optimizer=opt,
                       metrics=["accuracy"])
-
+        print(self.model.summary())
         return self.model
 
 
