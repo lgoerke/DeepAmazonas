@@ -109,9 +109,7 @@ def train_generator(data_dir, reader, splitter, batch_size, img_size=256, load_r
             if cnt == num:
                 break
                  
-
-
-
+                 
 def val_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb=False):
     val_idx = splitter.val_idx
 

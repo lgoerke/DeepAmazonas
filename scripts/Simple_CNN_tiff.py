@@ -28,6 +28,7 @@ from sklearn.cross_validation import KFold
 from sklearn.metrics import fbeta_score
 import time
 
+from Classifiers.simple_net import SimpleNet
 
 # Pre-processing the train and test data
 
@@ -236,30 +237,14 @@ for train_index, valid_index in kf:
         
         kfold_weights_path = os.path.join('', 'weights_kfold_' + str(num_fold) + '.h5')
         
-        model = Sequential()
-        model.add(BatchNormalization(input_shape=(resize_to[0], resize_to[1], 4))) # 64
-        model.add(Conv2D(8, 1, 1, activation='relu')) # 64
-        model.add(Conv2D(16, 3, 3, activation='relu')) # 62
-        model.add(MaxPooling2D(pool_size=(2, 2))) # 31
-        model.add(Conv2D(32, 3, 3, activation='relu')) # 29
-        model.add(MaxPooling2D(pool_size=(2, 2))) # 14
-        model.add(Dropout(0.25))
-        model.add(Conv2D(64, 3, 3, activation='relu')) # 12
-        model.add(MaxPooling2D(pool_size=(2, 2))) # 6
-        model.add(Dropout(0.25))
-        model.add(Flatten())
-        model.add(Dense(256, activation='relu'))
-        model.add(Dropout(0.5))
-        model.add(Dense(17, activation='sigmoid'))
 
-        model.compile(loss='binary_crossentropy', 
-                      optimizer='adam',
-                      metrics=['accuracy'])
+        classifier = SimpleNet(resize_to, n_classes=17, nb_epoch = 10, batch_size=128, optimizer='adadelta')
+
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=2, verbose=0),
             ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0)]
         
-        model.fit(x = X_train, y= Y_train, validation_data=(X_valid, Y_valid),
+        classifier.model.fit(x = X_train, y= Y_train, validation_data=(X_valid, Y_valid),
                   batch_size=128,verbose=2, nb_epoch=10,callbacks=callbacks,
                   shuffle=True)
         

@@ -39,8 +39,16 @@ class SimpleNet(Classifier_base):
 	Constructor
 	@params: list of all model parameters
 	'''
-	def __init__(self, params):
-		pass
+	def __init__(self, shape=(224, 224), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam'):
+		
+		self.shape = shape
+        self.n_classes = n_classes
+        self.nb_epoch = nb_epoch
+        self.lr = lr
+        self.optimizer = optimizer
+        self.batch_size = batch_size
+
+		self.build()
 
 
 	def make_block(self, out_channels, kernel_size=3, stride=1, padding=1):
@@ -116,9 +124,9 @@ class SimpleNet(Classifier_base):
 		if self.optimizer == 'adam':
             opt = optimizers.adam(lr=self.lr)
         elif self.optimizer == 'adadelta':
-            opt = optimizers.adadelta(lr = self.lr)
+            opt = optimizers.adadelta()
         else:
-            opt=optimizers.SGD(lr=self.lr, momentum=0.9, decay=0.0, nesterov=True)
+            opt=optimizers.SGD(lr=self.lr, momentum=0.9, decay=0.0005, nesterov=True)
 
 		self.model = Dense(self.n_classes, activation='sigmoid')(x)
 
