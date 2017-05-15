@@ -4,8 +4,8 @@ import sys
 import os
 import time
 import numpy as np
-from PIL import Image
-import georasters as gr
+#from PIL import Image
+#import georasters as gr
 from keras.preprocessing.image import ImageDataGenerator
 from spectral import *
 from skimage import io as skio
@@ -14,6 +14,24 @@ import cv2
 from tqdm import tqdm
 from os import listdir
 from os.path import isfile, join
+
+LABELS = {'blow_down':0,
+          'bare_ground':1,
+          'conventional_mine':2,
+          'blooming':3,
+          'cultivation':4,
+          'artisinal_mine':5,
+          'haze':6,
+          'primary':7,
+          'slash_burn':8,
+          'habitation':9,
+          'clear':10,
+          'road':11,
+          'selective_logging':11,
+          'partly_cloudy':12,
+          'agriculture':13,
+          'water':14,
+          'cloudy':15}
 
 class Validation_splitter:
     '''
@@ -107,7 +125,7 @@ def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
         else:
             loaded, _ = load_single_tif(data_dir,reader.read_line_csv(i)[0],img_size)
             d.append(loaded)
-        l.append(reader.read_line_csv(i)[1])
+        l.append(to_one_hot(reader.read_line_csv(i)[1]))
 
     return d, l
 
@@ -123,6 +141,14 @@ def get_all_test(data_dir, img_size=256, load_rgb=False):
             d.append(loaded)
 
     return d
+
+def to_one_hot(targets):
+
+    one_hot = np.zeros(len(LABELS))
+    for label in targets.split(' '):
+        one_hot[LABELS[label]] = 1
+
+    return one_hot
 
 def train_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb=False):
     train_idx = splitter.train_idx
@@ -148,7 +174,7 @@ def train_generator(data_dir, reader, splitter, batch_size, img_size=256, load_r
             else:
                 loaded, _ = load_single_tif(data_dir,reader.read_line_csv(i)[0],img_size)
                 d.append(loaded)
-            l.append(reader.read_line_csv(i)[1])
+            l.append(to_one_hot(reader.read_line_csv(i)[1]))
         d = np.array(d)
         l = np.array(l)
 
@@ -189,7 +215,7 @@ def val_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb
             else:
                 loaded, _ = load_single_tif(data_dir,reader.read_line_csv(i)[0],img_size)
                 d.append(loaded)
-            l.append(reader.read_line_csv(i)[1])
+            l.append(to_one_hot(reader.read_line_csv(i)[1]))
 
         cnt = 0
         num_batches = len(d) / batch_size
