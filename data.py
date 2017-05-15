@@ -98,24 +98,4 @@ def val_generator(data_dir, reader, splitter, batch_size):
             l.append(reader.read_line_csv(i)[1])
 
         yield (np.array(d),np.array(l))
-
-
-    num = 500 
-    while True:
-        sampled_idx = np.random.choice(val_idx,size=num)
-        d = []
-        l = []
-
-        for i in sampled_idx:
-            d.append(load_single_tif(data_dir,reader.read_line_csv(i)[0]))
-            l.append(reader.read_line_csv(i)[1])
-        d = np.array(d)
-        l = np.array(l)
-
-        cnt = 0
-        for X_batch, Y_batch in datagen.flow(d,l, batch_size=batch_size):
-            yield (X_batch, Y_batch)
-            cnt+=batch_size   
-            if cnt == num:
-                break
     
