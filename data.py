@@ -27,15 +27,12 @@ class Validation_splitter:
             data = list(reader)
             ## Don't read header (-1)
             self.row_nums = np.arange(len(data)-1)
-            print(self.row_nums.shape)
             np.random.shuffle(self.row_nums)
             self.percentage = percentage
             self.num_fold = 0
             self.num_folds = int(1.0/percentage)
-            print(self.num_folds)
             self.fold_size = int(len(self.row_nums)*percentage)
-            print(self.fold_size)
-    def nextFold(self):
+    def next_fold(self):
         if self.num_folds > self.num_fold:
             if self.num_folds > self.num_fold + 1:
                 select = np.arange(self.num_fold*self.fold_size,self.num_fold*self.fold_size + self.fold_size)           
@@ -55,7 +52,7 @@ class CSV_line_reader:
 
     def read_line_csv(self,line_num):
         ## Because header was deleted in indices, read next line always
-        return self.content[line_num+1][0], self.content[line_num+1][1] 
+        return self.content[line_num+1][0], self.content[line_num+1][1]
 
 def load_single_tif(dir,file_path,img_size,to_255=False):
     '''
@@ -161,17 +158,27 @@ def train_generator(data_dir, reader, splitter, batch_size, img_size=256, load_r
         for X_batch, Y_batch in datagen.flow(d,l, batch_size=batch_size):
             yield (X_batch, Y_batch)
             cnt+=batch_size   
-            if cnt == num:
+            if cnt >= num:
                 break
 
 def val_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb=False):
     val_idx = splitter.val_idx
 
     start = 0
+    num = 500
+    times = int(num/batch_size)
+    num = times * batch_size
     while True:
-        idx = val_idx[start:(start+batch_size)%len(val_idx)]
-        start += batch_size 
-        if start > len(val_idx): start = 0
+        #idx = val_idx[start:(start+batch_size)%len(val_idx)]
+        #start += batch_size 
+        if start+num > len(val_idx):
+            end = start+num - len(val_idx)
+            select = np.concatenate(np.arange(start,len(val_idx)),np.arange(end)).astype(int)
+        else: 
+            select = np.arange(start,start+num).astype(int)
+        idx = val_idx[select]
+        start += num
+        if start > len(val_idx): start = start - len(val_idx)
 
         d = []
         l = []
@@ -184,5 +191,10 @@ def val_generator(data_dir, reader, splitter, batch_size, img_size=256, load_rgb
                 d.append(loaded)
             l.append(reader.read_line_csv(i)[1])
 
-        yield (np.array(d),np.array(l))
-    
+        cnt = 0
+        num_batches = len(d) / batch_size
+        for batch in range(int(num_batches)):
+            yield (d[cnt:cnt+batch_size], l[cnt:cnt+batch_size])
+            cnt+=batch_size   
+            if cnt >= num:
+                break
