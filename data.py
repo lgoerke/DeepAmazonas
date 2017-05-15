@@ -26,10 +26,27 @@ class Validation_splitter:
             reader = csv.reader(csvfile,delimiter = ",")
             data = list(reader)
             ## Don't read header (-1)
-            row_nums = np.arange(len(data)-1)
-            np.random.shuffle(row_nums)
-            self.train_idx = row_nums[int(len(row_nums)*percentage):]
-            self.val_idx = row_nums[:int(len(row_nums)*percentage)]
+            self.row_nums = np.arange(len(data)-1)
+            print(self.row_nums.shape)
+            np.random.shuffle(self.row_nums)
+            self.percentage = percentage
+            self.num_fold = 0
+            self.num_folds = int(1.0/percentage)
+            print(self.num_folds)
+            self.fold_size = int(len(self.row_nums)*percentage)
+            print(self.fold_size)
+    def nextFold(self):
+        if self.num_folds > self.num_fold:
+            if self.num_folds > self.num_fold + 1:
+                select = np.arange(self.num_fold*self.fold_size,self.num_fold*self.fold_size + self.fold_size)           
+            else:
+                select = np.arange(self.num_fold*self.fold_size,len(self.row_nums))
+            self.val_idx = self.row_nums[select]
+            self.train_idx = self.row_nums[~select]
+            self.num_fold += 1
+            return True
+        else:
+            return False
 
 class CSV_line_reader:
     def __init__(self,csv_path):
