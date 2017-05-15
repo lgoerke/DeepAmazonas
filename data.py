@@ -5,9 +5,12 @@ import os
 import time
 import numpy as np
 from PIL import Image
-from skimage import io
 import georasters as gr
 from keras.preprocessing.image import ImageDataGenerator
+from spectral import *
+from skimage import io as skio
+from sklearn.preprocessing import MinMaxScaler
+import cv2
 
 class Validation_splitter:
     '''
@@ -33,31 +36,31 @@ class CSV_line_reader:
 
 def load_single_tif(dir,file_path,img_size,to_255=False):
     open_path = os.path.join(dir, file_path + '.tif')
-    #imarray = io.imread(open_path)
-    
-    #im = Image.open(open_path)
-    #imarray = numpy.array(im)
     imarray = gr.from_file(open_path)
     im = np.reshape(imarray.raster,(4,256,256))
     im = np.transpose(im,(1,2,0))
-
+    print(im.shape)
+    rescaleIMG = np.reshape(im, (-1, 1))
+    print(rescaleIMG.shape)
     if to_255:
         scaler = MinMaxScaler(feature_range=(0, 255))
-        rescaleIMG = scaler.fit_transform(im)
-        im = im.astype(np.uint8)
+        rescaleIMG = scaler.fit_transform(rescaleIMG)
+        img_scaled = (np.reshape(rescaleIMG, im.shape)).astype(np.uint8)
     else:
         scaler = MinMaxScaler(feature_range=(0, 1))
-        rescaleIMG = scaler.fit_transform(im)
-        im = im.astype(np.float32)
+        rescaleIMG = scaler.fit_transform(rescaleIMG)
+        img_scaled = (np.reshape(rescaleIMG, im.shape)).astype(np.float32)
 
-    return cv2.resize(im, (img_size, img_size))
+    return cv2.resize(img_scaled, (img_size, img_size))
 
 def load_tif_as_rgb(dir,file_path,img_size,to_255=False):
     open_path = os.path.join(dir, file_path + '.tif')
-    img = io.imread(open_path)
+    img = skio.imread(open_path)
     img_rgb = get_rgb(img, [2, 1, 0]) # RGB
+    print(img_rgb.shape)
     # rescaling to 0-255 range - uint8 for display
     rescaleIMG = np.reshape(img_rgb, (-1, 1))
+    print(rescaleIMG.shape)
     if to_255:
         scaler = MinMaxScaler(feature_range=(0, 255))
         rescaleIMG = scaler.fit_transform(rescaleIMG) 
