@@ -4,8 +4,6 @@ import sys
 import os
 import time
 import numpy as np
-#from PIL import Image
-#import georasters as gr
 from keras.preprocessing.image import ImageDataGenerator
 from spectral import *
 from skimage import io as skio
@@ -78,21 +76,19 @@ def load_single_tif(dir,file_path,img_size,to_255=False):
     Returns tif image with (img_size,img_size,4) shape and VI Score image with shape (img_size,img_size)
     '''
     open_path = os.path.join(dir, file_path + '.tif')
-    imarray = gr.from_file(open_path)
-    im = np.reshape(imarray.raster,(4,256,256))
-    im = np.transpose(im,(1,2,0))
-    rescaleIMG = np.reshape(im, (-1, 1))
+    img = skio.imread(open_path)
+    rescaleIMG = np.reshape(img, (-1, 1))
     if to_255:
         scaler = MinMaxScaler(feature_range=(0, 255))
         rescaleIMG = scaler.fit_transform(rescaleIMG)
-        img_scaled = (np.reshape(rescaleIMG, im.shape)).astype(np.uint8)
+        img_scaled = (np.reshape(rescaleIMG, img.shape)).astype(np.uint8)
     else:
         scaler = MinMaxScaler(feature_range=(0, 1))
         rescaleIMG = scaler.fit_transform(rescaleIMG)
-        img_scaled = (np.reshape(rescaleIMG, im.shape)).astype(np.float32)
+        img_scaled = (np.reshape(rescaleIMG, img.shape)).astype(np.float32)
 
     # spectral module ndvi function
-    vi = ndvi(im, 2, 3)
+    vi = ndvi(img, 2, 3)
 
     return cv2.resize(img_scaled, (img_size, img_size)), vi
 
