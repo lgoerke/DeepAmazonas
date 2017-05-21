@@ -163,7 +163,7 @@ def train_generator(data_dir, reader, splitter, batch_size, img_size=256, load_r
             horizontal_flip=True,
             fill_mode='nearest')
 
-    num = 500 
+    num = 33000 
     while True:
         sampled_idx = np.random.choice(train_idx,size=num)
         d = []

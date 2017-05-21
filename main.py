@@ -2,8 +2,9 @@ import numpy as np
 import pickle
 import sys
 import os
+import pandas
 from tqdm import tqdm
-
+import pdb
 
 import utils
 import data
@@ -18,7 +19,7 @@ def main(args):
 
     size = 64
     batch_size = 96
-    nb_epoch = 25
+    nb_epoch = 2
     optimizer = 'adadelta'
     val_split = 0.2
     N_CLASSES = 17
@@ -57,6 +58,7 @@ def main(args):
     
     print('validating')
     val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True)
+    pdb.set_trace()
     p_valid = classifier.predict(val_data)
 
     print('validation loss: {}'.format(fbeta_score(val_labels, np.array(p_valid) > 0.2, beta=2, average='samples')))
@@ -68,7 +70,7 @@ def main(args):
 
     test_data = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
     
-    p_test = model.predict(x_test, batch_size = 128, verbose=2)
+    p_test = classifier.predict(test_data)
     
     result = pd.DataFrame(p_test, columns = labels)
 
@@ -81,9 +83,9 @@ def main(args):
         ' '.join(list(a.index))
         preds.append(' '.join(list(a.index)))
 
-    df_test['tags'] = preds
+    result['tags'] = preds
 
-    df_test.to_csv('submission_keras.csv', index=False)
+    result.to_csv('submission_keras.csv', index=False)
 
 
 if __name__=='__main__':

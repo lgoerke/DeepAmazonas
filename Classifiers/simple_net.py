@@ -168,8 +168,8 @@ class SimpleNet(Classifier_base):
     @param test_imgs: test data
     @return predictions for test_imgs
     '''
-    def predict(test_imgs):
-        return self.model.predict(X_test, batch_size = self.batch_size, verbose = 1)
+    def predict(self, test_imgs):
+        return self.model.predict(test_imgs, batch_size = self.batch_size, verbose = 1)
 
 
     '''
