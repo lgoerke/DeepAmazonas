@@ -66,7 +66,7 @@ def main(args):
 
     thres_opt = utils.optimise_f2_thresholds(val_labels, p_valid)
 
-    test_data = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
+    test_data, file_ids = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
 
     p_test = classifier.predict(test_data)
 
@@ -82,6 +82,7 @@ def main(args):
         preds.append(' '.join(list(a.index)))
 
     result['tags'] = preds
+    result['image_name'] = file_ids
 
     result.to_csv('submission_keras.csv', index=False)
 
