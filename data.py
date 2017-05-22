@@ -134,7 +134,8 @@ def get_all_train(data_dir, reader, splitter, img_size=256, load_rgb=False):
             d.append(loaded)
         l.append(to_one_hot(reader.read_line_csv(i)[1]))
 
-    return d, l
+    return np.array(d), np.array(l)
+
 
 def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
     val_idx = splitter.val_idx
@@ -149,21 +150,23 @@ def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
             d.append(loaded)
         l.append(to_one_hot(reader.read_line_csv(i)[1]))
 
-    return d, l
+    return np.array(d), np.array(l)
 
 
 def get_all_test(data_dir, img_size=256, load_rgb=False):
     files = [os.path.splitext(f)[0] for f in listdir(data_dir) if isfile(join(data_dir, f))]
     d = []
+    file_ids = []
 
     for f in tqdm(files, desc='Loading test set'):
+        files.append(f)
         if load_rgb:
             d.append(load_tif_as_rgb(data_dir, f, img_size))
         else:
             loaded, _ = load_single_tif(data_dir, f, img_size)
             d.append(loaded)
 
-    return d
+    return np.array(d), np.array(file_ids)
 
 
 def to_one_hot(targets):
