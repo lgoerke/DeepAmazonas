@@ -125,16 +125,19 @@ def get_all_train(data_dir, reader, splitter, img_size=256, load_rgb=False):
 
     d = []
     l = []
+    file_ids = []
 
     for i in tqdm(all_idx, desc='Loading validation set'):
+        f = reader.read_line_csv(i)[0]
+        file_ids.append(f)
         if load_rgb:
-            d.append(load_tif_as_rgb(data_dir, reader.read_line_csv(i)[0], img_size))
+            d.append(load_tif_as_rgb(data_dir, f, img_size))
         else:
-            loaded, _ = load_single_tif(data_dir, reader.read_line_csv(i)[0], img_size)
+            loaded, _ = load_single_tif(data_dir, f, img_size)
             d.append(loaded)
         l.append(to_one_hot(reader.read_line_csv(i)[1]))
 
-    return np.array(d), np.array(l)
+    return np.array(d), np.array(l), np.array(file_ids)
 
 
 def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
@@ -159,13 +162,12 @@ def get_all_test(data_dir, img_size=256, load_rgb=False):
     file_ids = []
 
     for f in tqdm(files, desc='Loading test set'):
-        files.append(f)
+        file_ids.append(f)
         if load_rgb:
             d.append(load_tif_as_rgb(data_dir, f, img_size))
         else:
             loaded, _ = load_single_tif(data_dir, f, img_size)
             d.append(loaded)
-
     return np.array(d), np.array(file_ids)
 
 
