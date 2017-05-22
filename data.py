@@ -12,6 +12,7 @@ import cv2
 from tqdm import tqdm
 from os import listdir
 from os.path import isfile, join
+import h5py
 
 LABELS = {'blow_down': 0,
           'bare_ground': 1,
@@ -39,17 +40,16 @@ class Validation_splitter:
         validation data) and csv to train data
     '''
 
-    def __init__(self, csv_path, percentage):
-        with open(csv_path, 'r') as csvfile:
-            reader = csv.reader(csvfile, delimiter=",")
-            data = list(reader)
-            ## Don't read header (-1)
-            self.row_nums = np.arange(len(data) - 1)
-            np.random.shuffle(self.row_nums)
-            self.percentage = percentage
-            self.num_fold = 0
-            self.num_folds = int(1.0 / percentage)
-            self.fold_size = int(len(self.row_nums) * percentage)
+    def __init__(self, path, percentage):
+
+        file = h5py.File(path, "r")
+        ids = file["filenames"]
+        self.row_nums = np.arange(len(ids))
+        np.random.shuffle(self.row_nums)
+        self.percentage = percentage
+        self.num_fold = 0
+        self.num_folds = int(1.0 / percentage)
+        self.fold_size = int(len(self.row_nums) * percentage)
 
     def next_fold(self):
         if self.num_folds > self.num_fold:
@@ -64,6 +64,43 @@ class Validation_splitter:
         else:
             return False
 
+
+class HDF_line_reader:
+    def __init__(self, path):
+        file = h5py.File(path, "r")
+        self.images = file['imgs']
+        self.labels = file['labels']
+        self.filenames = file['filenames']
+
+    def read_line_hdf(self, line_num):
+        return self.images[line_num], self.labels[line_num], self.filenames[line_num]
+
+
+def get_all_train_hdf(reader):
+    d = reader.images
+    l = reader.labels
+    file_ids = reader.filenames
+
+    return d, l, file_ids
+
+def get_all_val_hdf(data_dir, reader, splitter, img_size=256, load_rgb=False):
+    val_idx = splitter.val_idx
+    d = []
+    l = []
+
+    for i in tqdm(val_idx, desc='Loading validation set'):
+        if load_rgb:
+            d.append(load_tif_as_rgb(data_dir, reader.read_line_csv(i)[0], img_size))
+        else:
+            loaded, _ = load_single_tif(data_dir, reader.read_line_csv(i)[0], img_size)
+            d.append(loaded)
+        l.append(to_one_hot(reader.read_line_csv(i)[1]))
+
+    return np.array(d), np.array(l)
+
+####################################################################
+###################### For loading per images ######################
+####################################################################
 
 class CSV_line_reader:
     def __init__(self, csv_path):
@@ -125,17 +162,19 @@ def get_all_train(data_dir, reader, splitter, img_size=256, load_rgb=False):
 
     d = []
     l = []
+    file_ids = []
 
     for i in tqdm(all_idx, desc='Loading validation set'):
+        f = reader.read_line_csv(i)[0]
+        file_ids.append(f)
         if load_rgb:
-            d.append(load_tif_as_rgb(data_dir, reader.read_line_csv(i)[0], img_size))
+            d.append(load_tif_as_rgb(data_dir, f, img_size))
         else:
-            loaded, _ = load_single_tif(data_dir, reader.read_line_csv(i)[0], img_size)
+            loaded, _ = load_single_tif(data_dir, f, img_size)
             d.append(loaded)
         l.append(to_one_hot(reader.read_line_csv(i)[1]))
 
-    return np.array(d), np.array(l)
-
+    return np.array(d), np.array(l), np.array(file_ids)
 
 def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
     val_idx = splitter.val_idx
@@ -159,13 +198,12 @@ def get_all_test(data_dir, img_size=256, load_rgb=False):
     file_ids = []
 
     for f in tqdm(files, desc='Loading test set'):
-        files.append(f)
+        file_ids.append(f)
         if load_rgb:
             d.append(load_tif_as_rgb(data_dir, f, img_size))
         else:
             loaded, _ = load_single_tif(data_dir, f, img_size)
             d.append(loaded)
-
     return np.array(d), np.array(file_ids)
 
 
