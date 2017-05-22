@@ -2,7 +2,7 @@ import numpy as np
 import pickle
 import sys
 import os
-import pandas
+import pandas as pd
 from tqdm import tqdm
 import pdb
 
@@ -14,9 +14,7 @@ from data import CSV_line_reader
 from Classifiers.simple_net import SimpleNet
 
 
-
 def main(args):
-
     size = 64
     batch_size = 96
     nb_epoch = 2
@@ -24,13 +22,14 @@ def main(args):
     val_split = 0.2
     N_CLASSES = 17
     N_SAMPLES = 40478
+
     labels = list(data.LABELS.keys())
     cross_val = False
 
     classifier = SimpleNet((size,size,3), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
 
     splitter = Validation_splitter('input/train_v2.csv', val_split)
-    test_data = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
+    test_data, file_ids = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
     val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True)
 
     result = np.zeros((len(test_data),N_CLASSES))
@@ -42,7 +41,6 @@ def main(args):
 
         print('start training: ')
         classifier.fit(tg, vg, ((1-val_split) * N_SAMPLES, val_split * N_SAMPLES))
-
         
         print('validating')
         #pdb.set_trace()
@@ -61,7 +59,6 @@ def main(args):
     result /= splitter.num_folds
     result = pd.DataFrame(result, columns = labels)    
     
-
     preds = []
     for i in tqdm(range(result.shape[0]), miniters=1000):
         a = result.ix[[i]]
@@ -72,9 +69,10 @@ def main(args):
         preds.append(' '.join(list(a.index)))
 
     result['tags'] = preds
+    result['image_name'] = file_ids
 
     result.to_csv('submission_keras.csv', index=False)
 
 
-if __name__=='__main__':
-	main([])
+if __name__ == '__main__':
+    main([])
