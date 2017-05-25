@@ -76,7 +76,7 @@ class VGG16(Classifier_base):
         for layer in self.model.layers[self.nl_unfreeze:]:
                 layer.trainable = True
 
-        self.model.compile(optimizer=SGD(lr=0.0001, momentum=0.9), loss='binary_crossentropy', metrics=['accuracy'])
+        self.model.compile(optimizer=optimizers.SGD(lr=0.0001, momentum=0.9), loss='binary_crossentropy', metrics=['accuracy'])
         
         
     def fit(self, train_generator, validation_generator, steps):
