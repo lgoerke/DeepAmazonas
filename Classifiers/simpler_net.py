@@ -1,0 +1,198 @@
+#from Classifiers.classifier_base import Classifier_base
+
+import os
+os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,root=/usr/local/cuda-8.0,device=cuda0"
+
+from keras.models import Model
+from keras.layers import (
+    Input,
+    Activation,
+    Dense,
+    Flatten,
+    concatenate,
+    Dropout
+)
+from keras.layers.convolutional import (
+    Conv2D,
+    MaxPooling2D,
+    AveragePooling2D,
+    ZeroPadding2D
+)
+from keras.layers.merge import add#, Concatenate
+from keras.layers.normalization import BatchNormalization
+from keras.regularizers import l2
+from keras import optimizers
+from keras import backend as K
+from keras.callbacks import EarlyStopping
+from keras.preprocessing.image import ImageDataGenerator
+
+from keras.layers.advanced_activations import PReLU
+
+'''
+Simple neural network classifier
+'''
+class SimpleNet():
+
+    '''
+    Class variable containing parameters to optimize
+    together with ranges.
+    E.g. hp.uniform( 'dropout', 0, 0.6)
+    '''
+    space = (
+
+    )
+
+    '''
+    Constructor
+    @params: list of all model parameters
+    '''
+    def __init__(self, shape=(224, 224,4), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam'):
+        
+        self.shape = shape
+        self.n_classes = n_classes
+        self.nb_epoch = nb_epoch
+        self.lr = lr
+        self.optimizer = optimizer
+        self.batch_size = batch_size
+
+        self.build()
+
+
+    def make_block(self, out_channels, kernel_size=3, stride=1, padding=1):
+
+        kernel_initializer = "he_normal"
+        kernel_regularizer = l2(0.0001)
+
+        def f(input):
+            
+            pad = ZeroPadding2D(padding)(input)
+            conv = Conv2D(filters=out_channels, kernel_size=kernel_size,
+                strides=stride,
+                kernel_initializer=kernel_initializer,
+                kernel_regularizer=kernel_regularizer)(pad)
+            batch = BatchNormalization()(conv)
+            activation = PReLU()(batch)
+
+            return activation
+
+        return f    
+
+
+    def build(self):
+
+        kernel_initializer="he_normal"
+
+        input = Input(shape=self.shape)
+
+        x = self.make_block(8, kernel_size=1, stride=1, padding=0)(input)
+        #x = self.make_block(8, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(8, kernel_size=1, stride=1, padding=0)(x)
+
+        x = self.make_block(32, kernel_size=3, stride=1, padding=1)(x)
+        '''x = self.make_block(32, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(32, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(32, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(32, kernel_size=3, stride=1, padding=1)(x)'''
+        x = MaxPooling2D(pool_size=2, strides=2, padding="same")(x)
+        
+
+        x = self.make_block(64, kernel_size=3, stride=1, padding=1)(x)
+        '''x = self.make_block(64, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(64, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(64, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(64, kernel_size=3, stride=1, padding=1)(x)'''
+        x = MaxPooling2D(pool_size=2, strides=2, padding="same")(x)
+        x = Dropout(0.25)(x)
+
+        outa = AveragePooling2D(self.shape[0] // 4)(x)
+        outa = Flatten()(outa)
+
+        x = self.make_block(128, kernel_size=3, stride=1, padding=1)(x)
+        '''x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
+        x = self.make_block(128, kernel_size=3, stride=1, padding=1)(x)'''
+        x = MaxPooling2D(pool_size=2, strides=2, padding="same")(x)
+        x = Dropout(0.50)(x)
+
+        outb = AveragePooling2D(self.shape[0] // 8)(x)
+        outb = Flatten()(outb)
+
+        out = concatenate([outa, outb], axis=-1)
+
+        x = Dense(512,kernel_initializer="he_normal")(out)
+        x = BatchNormalization()(x)
+        x = Activation('relu')(x)
+
+        x = Dense(512,kernel_initializer="he_normal")(x)
+        x = BatchNormalization()(x)
+        x = Activation('relu')(x)
+
+        output = Dense(self.n_classes, activation='sigmoid')(x)
+        
+        if self.optimizer == 'adam':
+            opt = optimizers.adam(lr=self.lr)
+        elif self.optimizer == 'adadelta':
+            opt = optimizers.adadelta()
+        else:
+            opt=optimizers.SGD(lr=self.lr, momentum=0.9, decay=0.0005, nesterov=True)
+
+
+        self.model = Model(inputs=input, outputs=output)
+
+        self.model.compile(loss='binary_crossentropy',
+                      optimizer=opt,
+                      metrics=["accuracy"])
+        
+        return self.model
+
+
+    '''
+    Train classifier with training data.
+    All required parameters for training except for data is passed to the 
+    constructor. 
+    @param train_generator: Generator for training data
+    @param validation_generator: Generator for validation data
+    @param steps: Number of batches per epoch
+    '''
+    def fit(self, X, Y, steps=1):
+        
+        #early = EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=0, mode='auto')
+        
+        '''train_generator=ImageDataGenerator(
+                rotation_range=15,
+                width_shift_range=0.2,
+                height_shift_range=0.2,
+                shear_range=0.2,
+                zoom_range=0.2,
+                horizontal_flip=True,
+                fill_mode='nearest')'''
+        
+        '''train_generator.fit(X)'''
+        
+        self.model.fit(X,Y, batch_size = self.batch_size,epochs = 2) #_generator(train_generator.flow(X,Y),steps_per_epoch=1)#, steps_per_epoch=steps[0]//self.batch_size, 
+            #validation_data=validation_generator, validation_steps=steps[1]//self.batch_size,
+            #callbacks=[early], epochs = self.nb_epoch, verbose = 1)
+
+
+
+
+    '''
+    Predict class labels on test data
+    @param test_imgs: test data
+    @return predictions for test_imgs
+    '''
+    def predict(self, test_imgs):
+        return self.model.predict(test_imgs, batch_size = self.batch_size, verbose = 1)
+
+
+    '''
+    Evaluate classifier performance of validation data
+    @param validation_generator: Generator for validation data
+    @param steps: Number of batches per epoch
+    @return classification loss
+    '''
+    def evaluate(self, validation_generator, steps):
+        steps = steps // self.batch_size or 1
+        score = self.model.evaluate_generator(validation_generator, steps=steps, workers=1)    
+        return score[0] 
