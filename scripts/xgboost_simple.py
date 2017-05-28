@@ -1,26 +1,76 @@
-# From https://www.kaggle.com/opanichev/xgb-starter-lb-0-88232
+# Original idea from https://www.kaggle.com/opanichev/xgb-starter-lb-0-88232
 
 import numpy as np
-import os
 import pandas as pd
 import random
 from tqdm import tqdm
 import xgboost as xgb
+import pickle
 
 import scipy
-from sklearn.metrics import fbeta_score
 
 from PIL import Image
+
+from sklearn.metrics import mean_squared_error
+
+from hyperopt import STATUS_OK
+from hyperopt import hp, fmin, tpe
+
+from sklearn.model_selection import StratifiedShuffleSplit
 
 random_seed = 0
 random.seed(random_seed)
 np.random.seed(random_seed)
 
 # Load data
-train_path = './input/train-jpg/'
-test_path = './input/test-jpg/'
-train_labels = pd.read_csv('./input/train.csv')
-test_labels = pd.read_csv('./input/sample_submission.csv')
+train_path = '../input/train-jpg/'
+test_path = '../input/test-jpg/'
+train_labels = pd.read_csv('../input/train.csv')
+test_labels = pd.read_csv('../input/sample_submission.csv')
+
+#############################################################
+#############################################################
+def run_model(data=None, labels=None, train_index=None, val_index=None, num_label=0, params=None): # scale_pos_weight=1, lambda=1
+
+    global best
+    global model
+
+    n_estimators = params[0]
+    lr = params[1]
+    min_child_weight = params[2]
+    max_depth = params[3]
+    params = {'n_estimators': n_estimators, 'lr':lr,'min_child_weight':min_child_weight,'max_depth':max_depth}
+
+    # Get training and validation set
+    train_data = data[train_index]
+    train_labels = labels[train_index]
+    val_data = data[val_index]
+    val_labels = labels[val_index]
+
+    # Parameters doc: http://xgboost.readthedocs.io/en/latest/parameter.html
+    # https://www.analyticsvidhya.com/blog/2016/03/complete-guide-parameter-tuning-xgboost-with-codes-python/
+    xgb_model = xgb.XGBClassifier(max_depth=max_depth, learning_rate=lr, n_estimators=n_estimators, \
+                              min_child_weight=min_child_weight, \
+                            scale_pos_weight=1, base_score=0.5, objective='binary:logistic')
+
+
+    xgb_model.fit(train_data, train_labels)
+    labels_pred = xgb_model.predict(val_data)
+
+    loss = mean_squared_error(val_labels, labels_pred) # Use weights to fight class imbalance?
+
+    if loss < best:
+        best = loss
+        model = xgb_model
+        pickle.dump(params, open('../models/xgb/xbg_best_{}.pkl'.format(num_label), 'wb'))
+        print('New best params for label {}: {}'.format(num_label, params))
+
+    return {'loss': loss, 'status': STATUS_OK}
+
+#############################################################
+#############################################################
+
+
 
 
 def extract_features(df, data_path):
@@ -110,6 +160,17 @@ print('Extracting train features')
 train_features = extract_features(train_labels, train_path)
 print('Extracting test features')
 test_features = extract_features(test_labels, test_path)
+# Save features
+with open('train_features.out', 'wb') as outfile:
+    pickle.dump(train_features, outfile)
+with open('test_features.out', 'wb') as outfile:
+    pickle.dump(test_features, outfile)
+#with open('train_features.out', 'rb') as data_file:
+#    train_features = pickle.load(data_file)
+#with open('test_features.out', 'rb') as data_file:
+#    test_features = pickle.load(data_file)
+
+
 
 # Prepare data
 # Delete tags from the dictionary
@@ -122,18 +183,21 @@ labels = np.array(list(set(flatten([l.split(' ') for l in train_features['tags']
 
 # Create dictionary with name-number and number-name
 label_map = {l: i for i, l in enumerate(labels)}
-inv_label_map = {i: l for l, i in label_map.items()}
+inv_label_map = {i: l for l, i in label_map.items()} # Not used
 
 
 # Create one-hot encoding
-# TODO Set miniters to 1000
-for tags in tqdm(train_labels.tags.values, miniters=100):
+for tags in tqdm(train_labels.tags.values, miniters=1000):
     targets = np.zeros(len(labels))
     for t in tags.split(' '):
         targets[label_map[t]] = 1
     y_train.append(targets)
 
 y = np.array(y_train, np.uint8)
+# Save encoding
+with open('onehot_encoding.out', 'wb') as outfile:
+    pickle.dump(y, outfile)
+
 
 # Print some interesting info
 print('X.shape = ' + str(X.shape))
@@ -149,14 +213,34 @@ y_pred = np.zeros((X_test.shape[0], n_classes))
 
 print('Training and making predictions')
 for class_i in tqdm(range(n_classes), miniters=1):
-    model = xgb.XGBClassifier(max_depth=5, learning_rate=0.1, n_estimators=100, \
-                              silent=True, objective='binary:logistic', nthread=-1, \
-                              gamma=0, min_child_weight=1, max_delta_step=0, \
-                              subsample=1, colsample_bytree=1, colsample_bylevel=1, \
-                              reg_alpha=0, reg_lambda=1, scale_pos_weight=1, \
-                              base_score=0.5, seed=random_seed, missing=None)
-    model.fit(X, y[:, class_i])
+
+    # Global variables
+    best = np.inf
+    model = None
+
+    print('start optimization {}'.format(class_i))
+
+    sss = StratifiedShuffleSplit(n_splits=2, test_size=0.2)
+    train_index, val_index = next(sss.split(X, y[:, class_i]))
+
+
+    run = lambda params:\
+        run_model(data=X, labels=y[:, class_i], train_index=train_index, val_index=val_index,
+                  num_label=class_i, params=params)
+
+    space = [hp.choice('n_estimators', np.arange(50, 150+1, dtype=int)),
+             hp.uniform('lr', 0.0001, 0.1),
+             hp.uniform('min_child_weight', 0.8, 1.2),
+             hp.choice('max_depth', np.arange(2, 9+1, dtype=int))
+             ]
+
+    best_run = fmin(run, space, algo=tpe.suggest, max_evals=250)
+
+    print(best_run)
+
     y_pred[:, class_i] = model.predict_proba(X_test)[:, 1]
+
+
 
 #TODO Check why this 0.2 is here
 preds = [' '.join(labels[y_pred_row > 0.2]) for y_pred_row in y_pred]
