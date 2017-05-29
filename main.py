@@ -7,9 +7,10 @@ from tqdm import tqdm
 import pdb
 
 import utils
-import data
-from data import Validation_splitter
-from data import CSV_line_reader
+import data_hdf5 as data
+from data_hdf5 import Validation_splitter
+from data_hdf5 import HDF_line_reader
+from sklearn.metrics import fbeta_score
 
 from Classifiers.simple_net import SimpleNet
 
@@ -17,34 +18,36 @@ from Classifiers.simple_net import SimpleNet
 def main(args):
     size = 64
     batch_size = 96
-    nb_epoch = 2
+    nb_epoch = 1
     optimizer = 'adadelta'
     val_split = 0.2
     N_CLASSES = 17
-    N_SAMPLES = 40478
+    N_SAMPLES = 40479
+    N_TEST = 61191
+    test_batch_size = 9
 
     labels = list(data.LABELS.keys())
-    cross_val = False
+    cross_val = True
 
-    classifier = SimpleNet((size,size,3), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
+    classifier = SimpleNet((size,size,4), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
 
-    splitter = Validation_splitter('input/train_v2.csv', val_split)
-    test_data, file_ids = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
-    val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True)
+    splitter = Validation_splitter('input/train.h5', val_split)
+    #test_data, file_ids = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
+    #val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True)
 
-    result = np.zeros((len(test_data),N_CLASSES))
+    result = np.zeros((N_TEST,N_CLASSES))
     while(splitter.next_fold() and cross_val):
 
-        reader = CSV_line_reader('input/train_v2.csv')
-        tg = data.train_generator('input/train-tif-v2', reader, splitter, batch_size, img_size=size, load_rgb=True)
-        vg = data.val_generator('input/train-tif-v2', reader, splitter, batch_size, img_size=size, load_rgb=True)
+        reader = HDF_line_reader('input/train.h5', load_rgb = False, img_size=size)
+        tg = data.train_generator(reader, splitter, batch_size)
+        vg = data.val_generator(reader, splitter, batch_size)
 
         print('start training: ')
         classifier.fit(tg, vg, ((1-val_split) * N_SAMPLES, val_split * N_SAMPLES))
         
         print('validating')
         #pdb.set_trace()
-        p_valid = classifier.predict(val_data)
+        p_valid = classifier.evaluate(vg, len(splitter.val_idx))
 
         print('validation loss: {}'.format(fbeta_score(val_labels, np.array(p_valid) > 0.2, beta=2, average='samples')))
 
@@ -53,9 +56,13 @@ def main(args):
 
         thres_opt = utils.optimise_f2_thresholds(val_labels, p_valid) 
         
-        p_test = classifier.predict(test_data)
+        test_reader = HDF_line_reader('input/test.h5', load_rgb = False, img_size=size)
+        test_gen = data.test_generator(reader, test_batch_size)
+        p_test = classifier.predict(test_data, N_TEST // test_batch_size)
         result += p_test
-    
+        
+        cross_val = False 
+
     result /= splitter.num_folds
     result = pd.DataFrame(result, columns = labels)    
     
