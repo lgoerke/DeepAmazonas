@@ -22,7 +22,7 @@ class VGG16(Classifier_base):
     Constructor
     @params: list of all model parameters
     '''
-    def __init__(self, shape=(256, 256, 3), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam', nl_unfreeze=15):
+    def __init__(self, shape=(256, 256, 3), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam', nl_freeze=15):
         
         self.shape = shape
         self.n_classes = n_classes
@@ -30,7 +30,7 @@ class VGG16(Classifier_base):
         self.lr = lr
         self.optimizer = optimizer
         self.batch_size = batch_size
-        self.nl_unfreeze = nl_unfreeze
+        self.nl_unfreeze = nl_freeze
 
         self.build()
 
@@ -71,9 +71,9 @@ class VGG16(Classifier_base):
         return model
    
     def unfreeze_layers(self)
-	for layer in self.model.layers[:self.nl_unfreeze]:
+	for layer in self.model.layers[:self.nl_freeze]:
                 layer.trainable = False
-        for layer in self.model.layers[self.nl_unfreeze:]:
+        for layer in self.model.layers[self.nl_freeze:]:
                 layer.trainable = True
 
         self.model.compile(optimizer=optimizers.SGD(lr=0.0001, momentum=0.9), loss='binary_crossentropy', metrics=['accuracy'])
