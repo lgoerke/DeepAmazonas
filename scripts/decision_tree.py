@@ -3,8 +3,8 @@ import pandas as pd
 import tifffile 
 import cv2
 import os
-
-### STILL NEED TO IMPORT A CLASSIFIER WITH THE METHODS fit(x,y) and predict(X) FOR THIS SCRIPT TO WORK
+import pickle
+from matplotlib import pyplot as plt
 
 LABELS = {'blow_down': 0,
           'bare_ground': 1,
@@ -18,11 +18,11 @@ LABELS = {'blow_down': 0,
           'habitation': 9,
           'clear': 10,
           'road': 11,
-          'selective_logging': 11,
-          'partly_cloudy': 12,
-          'agriculture': 13,
-          'water': 14,
-          'cloudy': 15}
+          'selective_logging': 12,
+          'partly_cloudy': 13,
+          'agriculture': 14,
+          'water': 15,
+          'cloudy': 16}
           
 
  
@@ -31,15 +31,56 @@ def test_Nodes():
      |       Little test tree... 
      |
     / \
-    
+    | |
     '''
-    node_2_2_forestphenomena = Node([],['blow_down','blooming','slash_burn','selective_logging'])
-    node_2_1_infrstructure = Node([],['conventional_mine','artisinal_mine','road'])
-    node_1_land = Node([node_2_1_infrstructure, node_2_2_forestphenomena ],['agriculture','habitation','water','primary','cultivation','bare_ground'],['cloudy'])
-    node_0_weather = Node([node_1_land], ['cloudy','haze','partly_cloudy','clear'])
-    return node_0_weather
     
-def load_example(n = 200, path = '../input/train_tif_v2/' ):
+    X,y = load_example()
+    
+    y = add_class('infrastructure',['conventional_mine','artisinal_mine','slash_burn',],y)
+    y = add_class('forest_phenomena',['blow_down','blooming','cultivation','slash_burn','selective_logging'],y)
+    
+    node_3_1_phenomena_investigator = Node('node_3_1_phenomena_investigator',[],
+                                        ['blow_down','blooming','slash_burn','selective_logging'],
+                                        ['haze','partly_cloudy','clear'])
+                                        
+    node_2_1_forestphenomena = Node('node_2_1_forestphenomena', 
+                                        ['node_3_1_phenomena_investigator'],
+                                        ['forest_phenomena'],
+                                        ['haze','partly_cloudy','clear'])
+
+    node_3_0_infra_investigator = Node('node_3_0_infra_investigator',[],
+                                        ['conventional_mine','artisinal_mine','road'],
+                                        ['haze','partly_cloudy','clear'])
+                                        
+    node_2_0_infrastructure = Node('node_2_0_infrastructure',
+                                        ['node_3_0_infra investigtor'],
+                                        ['infrastructure'],
+                                        ['haze','partly_cloudy','clear'])
+    
+    node_1_land = Node('node_1_land',
+                                        [node_2_0_infrstructure, node_2_1_forestphenomena ],
+                                        ['agriculture','habitation','water','primary','cultivation','bare_ground'],
+                                        ['haze','partly_cloudy','clear'])
+
+    node_0_weather = Node('node_0_weather',[node_1_land], ['cloudy','haze','partly_cloudy','clear'])
+
+    return node_0_weather, [X, y]
+
+    
+def add_class(name, subclasses, y):
+    
+    indeces = []
+    
+    for c in subclasses:
+        indeces.append(LABELS[c])
+        
+    LABELS[name] = len(LABELS)
+        
+    return np.append(y, np.expand_dims(np.any(y[:,indeces], axis = 1),axis = 1),axis = 1)
+     
+        
+    
+def load_example(n = 200, path = '/media/sebastian/MYLINUXLIVE/amazon/' ):
     '''
     load a few pictures/targets info a sample matrix.
     '''
@@ -72,20 +113,23 @@ def load_example(n = 200, path = '../input/train_tif_v2/' ):
 class Node():
     '''One node in a decision tree, which creates one clsfr instance and can create a dataset for it.'''
     
-    def __init__(self,children, use_labels, exclude_classes = [], weights = None, clsfr=None):
+    def __init__(self,name, children, use_labels, include_classes = None, clsfr=None):
         '''
         @args:
-        children: array of Node()s that receive their input from this Node.
-        use_lables: Array of labels to include ['forest','clouds']
-        exclude_classes: Labels to not use when classified as 1 already.
+        -name: Name for this node
+        -children: array of Node()s that receive their input from this Node.
+        -use_lables: Array of labels to include ['forest','clouds']
+        -include_classes: Images to use when classified as 1 already, empty = all.
         
         '''
+        self.name = name
         self.X_mask = None
         self.y_history = None
         self.use_lables = use_labels
         self.lbls = None
         self.children = children
-        self.exclude_classes = exclude_classes
+        self.include_classes = include_classes
+        self.name = name
         if clsfr is None:
             self.clsfr = self.__init_clsfr__()
         else:
@@ -108,11 +152,12 @@ class Node():
         
         t = np.copy(t)
         
-        #Cut out unwanted objects that have been classified as sth before (e.g. all cloudy > .5)        
+        #Keep only certain defined objects that have been classified as sth before (e.g. all cloudy > .5)        
         X_mask = np.ones((X.shape[0]))
         
-        for i, cat in enumerate(self.exclude_classes):
-            X_mask = np.multiply(X_mask,(y_history[:,LABELS[cat]] < 0.4))
+        if self.include_classes is not None :                            
+            for i, cat in enumerate(self.include_classes):
+                X_mask = np.multiply(X_mask,(y_history[:,LABELS[cat]] > 0.5))
             
         X1 = np.copy(X[(X_mask.astype(np.bool))])
             
@@ -149,8 +194,9 @@ class Node():
             y_history = np.zeros((X.shape[0],len(self.lbls)))
         
         X_mask = np.ones((X.shape[0]))
-        for i, cat in enumerate(self.exclude_classes):
-            X_mask = np.multiply(X_mask,(y_history[:,LABELS[cat]] <0.4))
+        if self.include_classes is not None:                            
+            for i, cat in enumerate(self.include_classes):
+                X_mask = np.multiply(X_mask,(y_history[:,LABELS[cat]] > 0.5))
         
         X1 = np.copy(X[X_mask.astype(np.bool)])
         
@@ -208,7 +254,7 @@ class Node():
         if y_history is None:
             print('Created new y-matrix')
             y_history = np.zeros((t.shape))
-
+ 
         self.train(X,t,y_history)
         
         y_history = self.apply(X,y_history)
@@ -216,3 +262,22 @@ class Node():
         for child in self.children:
             child.train_rec(X,y,y_history)
             
+    def save(self, path):
+        '''
+        Save the model to path/self.name.h5
+        
+        '''
+        model.save(path+self.name+".h5")
+        print('Saved model to '+ path+self.name' + '.h5')
+                
+    def load(self, path):
+        '''
+        Load the model from path/self.name.h5
+        '''
+        
+        this.clsfr.model=load_model(path+self.name+".h5")
+
+        print("Loaded model from disk")
+        
+        
+        
