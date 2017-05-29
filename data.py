@@ -33,7 +33,7 @@ LABELS = {'blow_down': 0,
           'cloudy': 16}
 
 
-class Validation_splitter:
+class Validation_splitter_hdf:
     '''
         Training/Validation data split utility class. Holds array with indices
         of training and validation data as defined by percentage (percentage of
@@ -72,6 +72,38 @@ class Validation_splitter:
 ####################################################################
 ###################### For loading per images ######################
 ####################################################################
+
+class Validation_splitter:
+    '''
+        Training/Validation data split utility class. Holds array with indices
+        of training and validation data as defined by percentage (percentage of
+        validation data) and csv to train data
+    '''
+
+    def __init__(self, csv_path, percentage):
+        with open(csv_path, 'r') as csvfile:
+            reader = csv.reader(csvfile, delimiter=",")
+            data = list(reader)
+            ## Don't read header (-1)
+            self.row_nums = np.arange(len(data) - 1)
+            np.random.shuffle(self.row_nums)
+            self.percentage = percentage
+            self.num_fold = 0
+            self.num_folds = int(1.0 / percentage)
+            self.fold_size = int(len(self.row_nums) * percentage)
+
+    def next_fold(self):
+        if self.num_folds > self.num_fold:
+            if self.num_folds > self.num_fold + 1:
+                select = np.arange(self.num_fold * self.fold_size, self.num_fold * self.fold_size + self.fold_size)
+            else:
+                select = np.arange(self.num_fold * self.fold_size, len(self.row_nums))
+            self.val_idx = self.row_nums[select]
+            self.train_idx = self.row_nums[~select]
+            self.num_fold += 1
+            return True
+        else:
+            return False
 
 class CSV_line_reader:
     def __init__(self, csv_path):
@@ -204,6 +236,11 @@ def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
         l.append(to_one_hot(reader.read_line_csv(i)[1]))
 
     return np.array(d), np.array(l)
+
+
+def get_all_test_files(data_dir):
+    files = [os.path.splitext(f)[0] for f in listdir(data_dir) if isfile(join(data_dir, f))]
+    return files
 
 
 def get_all_test(data_dir, img_size=256, load_rgb=False):
