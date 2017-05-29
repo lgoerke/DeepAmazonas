@@ -22,7 +22,7 @@ class VGG16(Classifier_base):
     Constructor
     @params: list of all model parameters
     '''
-    def __init__(self, shape=(256, 256, 3), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam', nl_unfreeze=172):
+    def __init__(self, shape=(256, 256, 3), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam', nl_unfreeze=15):
         
         self.shape = shape
         self.n_classes = n_classes
