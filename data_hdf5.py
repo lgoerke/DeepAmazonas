@@ -1,25 +1,16 @@
-import random
-import csv
-import sys
-import os
-import time
+from multiprocessing.dummy import Pool as ThreadPool
+
+import cv2
+import h5py
 import numpy as np
 from keras.preprocessing.image import ImageDataGenerator
 from spectral import *
-from skimage import io as skio
-from sklearn.preprocessing import MinMaxScaler
-import cv2
 from tqdm import tqdm
-from os import listdir
-from os.path import isfile, join
-import h5py
-import data
-import pdb
 
-from multiprocessing import pool
-from multiprocessing.dummy import Pool as ThreadPool 
+import data as dat
 
-LABELS = data.LABELS
+LABELS = dat.LABELS
+
 
 class Validation_splitter:
     '''
@@ -28,10 +19,11 @@ class Validation_splitter:
         validation data) and csv to train data
     '''
 
-    def __init__(self, path, percentage):
+    def __init__(self, path, percentage, mask=None):
 
         file = h5py.File(path, "r")
         ids = file["filenames"]
+        self.mask = mask
         self.row_nums = np.arange(len(ids))
         self.percentage = percentage
         self.num_fold = 0
@@ -45,11 +37,22 @@ class Validation_splitter:
             else:
                 select = np.arange(self.num_fold * self.fold_size, len(self.row_nums))
             self.val_idx = self.row_nums[select]
-            self.train_idx = self.row_nums[~select]
+
+            train_select = np.full(len(self.row_nums), True)
+            train_select[select] = False
+            self.train_idx = self.row_nums[train_select]
+
+            if self.mask:
+                self.current_train_mask = self.mask[train_select]
+                self.current_val_mask = self.mask[select]
+            else:
+                self.current_train_mask = None
+                self.current_val_mask = None
             self.num_fold += 1
             return True
         else:
             return False
+
 
 class HDF_line_reader:
     def __init__(self, path, load_rgb=False, img_size=256):
@@ -72,7 +75,7 @@ class HDF_line_reader:
             imgs = pool.map(lambda x: cv2.resize(x, (self.img_size, self.img_size)), imgs)
             pool.terminate()
 
-        if not self.test:    
+        if not self.test:
             return imgs, self.labels[line_num], self.filenames[line_num]
         else:
             return imgs, self.filenames[line_num]
@@ -85,6 +88,7 @@ def get_all_train(reader):
 
     return d, l, file_ids
 
+
 def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
     val_idx = splitter.val_idx
     d = []
@@ -92,18 +96,27 @@ def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
 
     for i in tqdm(val_idx, desc='Loading validation set'):
         if load_rgb:
-            d.append(load_tif_as_rgb(data_dir, reader.read_line_csv(i)[0], img_size))
+            d.append(dat.load_tif_as_rgb(data_dir, reader.read_line_csv(i)[0], img_size))
         else:
-            loaded, _ = load_single_tif(data_dir, reader.read_line_csv(i)[0], img_size)
+            loaded, _ = dat.load_single_tif(data_dir, reader.read_line_csv(i)[0], img_size)
             d.append(loaded)
-        l.append(data.to_one_hot(reader.read_line_csv(i)[1]))
+        l.append(dat.to_one_hot(reader.read_line_csv(i)[1]))
 
-    return np.array(d), np.array(l)      
+    return np.array(d), np.array(l)
 
 
-def train_generator(reader, splitter, batch_size):
+def train_generator(reader, splitter, batch_size, included_columns=[], new_columns={}):
+    '''
+    
+    :param reader: 
+    :param splitter: 
+    :param batch_size: 
+    :param included_columns: If empty, we want to include all columns
+    :return: 
+    '''
 
     train_idx = splitter.train_idx
+    current_train_mask = splitter.current_train_mask
 
     datagen = ImageDataGenerator(
         rotation_range=15,
@@ -125,6 +138,8 @@ def train_generator(reader, splitter, batch_size):
         else:
             select = np.arange(start, start + num).astype(int)
         idx = train_idx[select]
+        if current_train_mask:
+            mask_idx = current_train_mask[select]
         idx.sort()
         start += num
         if start > len(train_idx): start = start - len(train_idx)
@@ -133,6 +148,23 @@ def train_generator(reader, splitter, batch_size):
         l = []
 
         imgs, labels, _ = reader.read_line_hdf(list(idx))
+
+        if new_columns:
+            for key, value in new_columns.items():
+                indeces = []
+                for c in value:
+                    indeces.append(LABELS[c])
+                # TODO think about if we need the column name
+
+                labels = np.append(labels, np.expand_dims(np.any(labels[:, indeces], axis=1), axis=1), axis=1)
+
+        if included_columns:
+            # Cut away all uninportant class labels from y:
+            lbls = np.zeros((len(LABELS.keys())))
+            for lbl in (included_columns):
+                lbls[LABELS[lbl]] = True  # TODO: make 1-dimensional
+            labels = labels[:, lbls.astype(np.bool)]
+
         d.extend(imgs)
         l.extend(labels)
 
@@ -143,10 +175,14 @@ def train_generator(reader, splitter, batch_size):
 
         cnt = 0
         for X_batch, Y_batch in datagen.flow(d, l, batch_size=batch_size):
+            if current_train_mask:
+                X_batch = X_batch[mask_idx]
+                Y_batch = Y_batch[mask_idx]
             yield (X_batch, Y_batch)
             cnt += batch_size
             if cnt >= num:
                 break
+
 
 def val_generator(reader, splitter, batch_size):
     val_idx = splitter.val_idx
@@ -188,8 +224,6 @@ def val_generator(reader, splitter, batch_size):
 
 
 def test_generator(reader, batch_size):
-
-
     start = 0
     l = len(reader.images)
     while True:
@@ -207,6 +241,4 @@ def test_generator(reader, batch_size):
         imgs,_ = reader.read_line_hdf(select)
         start += batch_size
 
-        yield(np.array(imgs))
-
-        
+        yield (np.array(imgs))
