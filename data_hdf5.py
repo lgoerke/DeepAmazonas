@@ -119,7 +119,7 @@ def train_generator(reader, splitter, batch_size, included_columns=[], new_colum
     current_train_mask = splitter.current_train_mask
 
     datagen = ImageDataGenerator(
-        rotation_range=15,
+        #rotation_range=15,
         width_shift_range=0.2,
         height_shift_range=0.2,
         shear_range=0.2,

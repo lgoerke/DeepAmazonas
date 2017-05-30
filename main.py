@@ -81,7 +81,7 @@ def main(args):
         preds.append(' '.join(list(a.index)))
 
     df = pd.DataFrame(np.zeros((N_TEST,2)), columns=['image_name','tags'])
-    df['image_name'] = test_reader.filenamess
+    df['image_name'] = test_reader.filenames
     df['tags'] = preds
 
     id = 0
