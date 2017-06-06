@@ -16,10 +16,10 @@ from Classifiers.simple_net import SimpleNet
 
 
 def main(args):
-    size = 64
+    size = 128
     batch_size = 96
-    nb_epoch = 5
-    optimizer = 'adadelta'
+    nb_epoch = 10
+    optimizer = 'adam'
     val_split = 0.2
     N_CLASSES = 17
     N_SAMPLES = 40479
@@ -85,7 +85,7 @@ def main(args):
     df['tags'] = preds
 
     id = 0
-    df.to_csv('ensemble/submission_ensemble{}.csv'.format(id), index=False)
+    df.to_csv('submission{}.csv'.format(id), index=False)
 
 
 if __name__ == '__main__':

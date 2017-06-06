@@ -64,6 +64,9 @@ class HDF_line_reader:
         else:
             self.labels = file['labels']
         self.filenames = file['filenames']
+        fun = np.vectorize(lambda x: x.decode('utf-8'))
+        self.filenames = fun(self.filenames)
+
         self.rgb = load_rgb
         self.img_size = img_size
 
