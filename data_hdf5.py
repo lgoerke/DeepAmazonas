@@ -6,7 +6,7 @@ import numpy as np
 from keras.preprocessing.image import ImageDataGenerator
 from spectral import *
 from tqdm import tqdm
-
+import pdb
 import data as dat
 
 LABELS = dat.LABELS
@@ -71,7 +71,7 @@ class HDF_line_reader:
         self.img_size = img_size
 
     def read_line_hdf(self, line_num, img_size=256):
-        imgs = get_rgb(self.images[line_num], [2, 1, 0]) if self.rgb else self.images[line_num]
+        imgs = map(lambda x: get_rgb(x,[2,1,0]), self.images[line_num]) if self.rgb else self.images[line_num]
 
         if self.img_size < 256:
             pool = ThreadPool(4)
