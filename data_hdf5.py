@@ -12,6 +12,7 @@ import data as dat
 LABELS = dat.LABELS
 REV_LABELS = dat.REV_LABELS
 
+
 class Validation_splitter:
     '''
         Training/Validation data split utility class. Holds array with indices
@@ -89,6 +90,13 @@ def get_all_train(reader):
     return d, l, file_ids
 
 
+def get_all_test(reader):
+    d = reader.images
+    file_ids = reader.filenames
+
+    return d, file_ids
+
+
 def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
     val_idx = splitter.val_idx
     d = []
@@ -119,7 +127,7 @@ def train_generator(reader, splitter, batch_size, included_columns=[], new_colum
     current_train_mask = splitter.current_train_mask
 
     datagen = ImageDataGenerator(
-        #rotation_range=15,
+        # rotation_range=15,
         width_shift_range=0.2,
         height_shift_range=0.2,
         shear_range=0.2,
@@ -234,11 +242,11 @@ def test_generator(reader, batch_size):
             select = np.concatenate([np.arange(start, l).astype(int), np.arange(end).astype(int)])
         else:
             select = np.arange(start, start + batch_size).astype(int)
-        
+
         select = list(select)
         select.sort()
-        
-        imgs,_ = reader.read_line_hdf(select)
+
+        imgs, _ = reader.read_line_hdf(select)
         start += batch_size
 
         yield (np.array(imgs))

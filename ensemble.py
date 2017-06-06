@@ -9,25 +9,24 @@ from keras.callbacks import ModelCheckpoint
 from keras.layers.core import Dense
 from keras.models import Sequential
 
-import data as d
-from data import CSV_line_reader
-from data import Validation_splitter
+import data_hdf5 as d
+import data as data
+from data_hdf5 import HDF_line_reader
+from data_hdf5 import Validation_splitter
 
 
 def create_predictions(modellist, val_split):
-    splitter = Validation_splitter('input/train_v2.csv', val_split)
-    splitter.next_fold()
+    reader = HDF_line_reader('input/train.h5', load_rgb=False)
+    all_data, all_labels, _ = d.get_all_train(reader)
 
-    reader = CSV_line_reader('input/train_v2.csv')
-
-    all_data, all_labels = d.get_all_train('input/train-tif-v2', reader, splitter, img_size=256, load_rgb=False)
-    all_test, test_files = d.get_all_test('input/test-tif-v2', reader, splitter, img_size=256, load_rgb=False)
+    reader = HDF_line_reader('input/test.h5', load_rgb=False)
+    all_test, test_files = d.get_all_test(reader)
 
     predictions_train = np.zeros((len(modellist), len(all_data), 17))
     predictions_test = np.zeros((len(modellist), len(all_test), 17))
 
     for i, m in enumerate(modellist):
-        classifier = keras.model.load(os.path.join('models', m))
+        classifier = keras.models.load_model(os.path.join('models', m))
         predictions_train[i, :, :] = classifier.predict(all_data)
         predictions_test[i, :, :] = classifier.predict(all_test)
 
@@ -35,9 +34,12 @@ def create_predictions(modellist, val_split):
 
 
 def train_ensemble(predictions_train, all_labels, id):
+    predictions_train = np.transpose(predictions_train,(1,0,2))
+    predictions_train = np.reshape(predictions_train,(predictions_train.shape[0], predictions_train[1]*predictions_train[2]))
+
     model = Sequential()
-    model.add(Dense(1024, input_shape=(predictions_train.shape[0] * 17,)))
-    model.add(Dense(8, activation='softmax'))
+    model.add(Dense(1024, input_dim=(predictions_train.shape[1])))
+    model.add(Dense(17, activation='softmax'))
     model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
     print(model.summary())
 
@@ -52,9 +54,13 @@ def train_ensemble(predictions_train, all_labels, id):
 
 def predict_with_ensemble(predictions_test, mode='mean'):
     if mode == 'network':
+        predictions_test = np.transpose(predictions_test, (1, 0, 2))
+        predictions_test = np.reshape(predictions_test,
+                                       (predictions_test.shape[0], predictions_test[1] * predictions_test[2]))
+
         model = Sequential()
-        model.add(Dense(1024, input_shape=(predictions_test.shape[0] * 17,)))
-        model.add(Dense(8, activation='softmax'))
+        model.add(Dense(1024, input_dim=(predictions_test.shape[1])))
+        model.add(Dense(17, activation='softmax'))
 
         # define the checkpoint
         filepath = 'ensemble/ensemble_{}.hdf5'.format(id)
@@ -75,24 +81,6 @@ def predict_with_ensemble(predictions_test, mode='mean'):
 
 
 def ensemble(args):
-    labels = ['blow_down',
-              'bare_ground',
-              'conventional_mine',
-              'blooming',
-              'cultivation',
-              'artisinal_mine',
-              'haze',
-              'primary',
-              'slash_burn',
-              'habitation',
-              'clear',
-              'road',
-              'selective_logging',
-              'partly_cloudy',
-              'agriculture',
-              'water',
-              'cloudy']
-
     mlist = args.modellist
     val_split = args.val_split
     mode = args.mode
@@ -103,7 +91,8 @@ def ensemble(args):
     if mlist:
         predictions_train, all_labels, predictions_test, test_files = create_predictions(mlist, val_split)
     else:
-        test_files = d.get_all_test_files('input/test-tif-v2')
+        reader = HDF_line_reader('input/test.h5', load_rgb=False)
+        _, test_files = d.get_all_test(reader)
         predictions_test = np.zeros((0, 61191, 17))
 
     if mode == "network":
@@ -120,14 +109,14 @@ def ensemble(args):
             for i, c in enumerate(csv_files):
                 df = pd.read_csv(c)
                 for j, row in enumerate(df['tags']):
-                    predictions_csv[i, j, :] = d.to_one_hot(row)
+                    predictions_csv[i, j, :] = data.to_one_hot(row)
         predictions_tmp[:predictions_test.shape[0], :, :] = predictions_test
         predictions_tmp[predictions_test.shape[0]:, :, :] = predictions_csv
         predictions_test = predictions_tmp
 
     predictions = predict_with_ensemble(predictions_test, mode)
 
-    result = pd.DataFrame(predictions, columns=labels)
+    result = pd.DataFrame(predictions, columns=data.labels)
 
     preds = []
     for i in tqdm.tqdm(range(result.shape[0]), miniters=1000):
@@ -146,8 +135,9 @@ def ensemble(args):
 
 
 if __name__ == '__main__':
-    mlist = []
-    csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
+    mlist = ['simple_net_0.68','simple_net_0.48']
+    csv_files = []
+    #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
     val_split = 0.2
     mode = 'mean'
     id = '2ndTry'

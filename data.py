@@ -14,6 +14,24 @@ from os import listdir
 from os.path import isfile, join
 import h5py
 
+labels = ['blow_down',
+              'bare_ground',
+              'conventional_mine',
+              'blooming',
+              'cultivation',
+              'artisinal_mine',
+              'haze',
+              'primary',
+              'slash_burn',
+              'habitation',
+              'clear',
+              'road',
+              'selective_logging',
+              'partly_cloudy',
+              'agriculture',
+              'water',
+              'cloudy']
+
 LABELS = {'blow_down': 0,
           'bare_ground': 1,
           'conventional_mine': 2,
