@@ -49,7 +49,7 @@ class CSVWriter:
         self.pred_probs.append(pred_prob)
         self.pred_labels.append(pred_label)
 
-    def to_csv(self, file="runname"):
+    def to_csv(self, thres_opt, file="runname"):
         # Write output arrays to .csv file, to be called after the main loop
         array_imgs = np.concatenate(self.imgs, axis=0)
         array_ground_truths = np.concatenate(self.ground_truths, axis=0)
@@ -59,7 +59,9 @@ class CSVWriter:
         df_ground_truths = pd.DataFrame(array_ground_truths, index=array_imgs, columns=self.labels)
         df_pred_probs = pd.DataFrame(array_pred_probs, index=array_imgs, columns=self.labels)
         df_pred_labels = pd.DataFrame(array_pred_labels, index=array_imgs, columns=self.labels)
+        df_thres_opt = pd.DataFrame(thres_opt, columns=self.labels)
 
         df_ground_truths.to_csv(file + '_ground_truths.csv')
         df_pred_probs.to_csv(file+'_pred_probs.csv')
         df_pred_labels.to_csv(file+'_pred_lbls.csv')
+        df_thres_opt.to_csv(file + '_thres_opt.csv')
