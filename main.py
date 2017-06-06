@@ -32,8 +32,6 @@ def main(args):
     classifier = SimpleNet((size,size,4), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
 
     splitter = Validation_splitter('input/train.h5', val_split)
-    #test_data, file_ids = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
-    #val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True)
 
     result = np.zeros((N_TEST,N_CLASSES))
     while(splitter.next_fold() and cross_val):
