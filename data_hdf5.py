@@ -10,7 +10,7 @@ from tqdm import tqdm
 import data as dat
 
 LABELS = dat.LABELS
-
+REV_LABELS = dat.REV_LABELS
 
 class Validation_splitter:
     '''
