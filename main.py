@@ -32,13 +32,14 @@ def main(args):
     classifier = SimpleNet((size,size,4), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
 
     splitter = Validation_splitter('input/train.h5', val_split)
+    reader = HDF_line_reader('input/train.h5', load_rgb = False, img_size=size)
+    test_reader = HDF_line_reader('input/test.h5', load_rgb=False, img_size=size)
     #test_data, file_ids = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
     #val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True)
 
     result = np.zeros((N_TEST,N_CLASSES))
     while(splitter.next_fold() and cross_val):
 
-        reader = HDF_line_reader('input/train.h5', load_rgb = False, img_size=size)
         tg = data.train_generator(reader, splitter, batch_size)
         vg = data.val_generator(reader, splitter, batch_size)
 
@@ -60,8 +61,7 @@ def main(args):
         classifier.model.save(os.path.join('models', 'simple_net_{:2.2f}'.format(loss)))
 
         thres_opt = utils.optimise_f2_thresholds(val_labels, p_valid) 
-        
-        test_reader = HDF_line_reader('input/test.h5', load_rgb = False, img_size=size)
+
         test_gen = data.test_generator(test_reader, test_batch_size)
         p_test = classifier.predict(test_gen, N_TEST // test_batch_size)
         result += p_test[:N_TEST]
