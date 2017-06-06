@@ -170,7 +170,7 @@ class SimpleNet(Classifier_base):
     '''
     def predict(self, test_generator, steps):
         #return self.model.predict(test_imgs, batch_size = self.batch_size, verbose = 1)
-        return self.mode.predict_generator(test_generator, steps=steps)
+        return self.model.predict_generator(test_generator, steps=steps, verbose=1)
 
 
     '''

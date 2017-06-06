@@ -73,10 +73,12 @@ class HDF_line_reader:
         if self.img_size < 256:
             pool = ThreadPool(4)
             imgs = pool.map(lambda x: cv2.resize(x, (self.img_size, self.img_size)), imgs)
+            pool.terminate()
 
         if not self.test:
             return imgs, self.labels[line_num], self.filenames[line_num]
-        return imgs, self.filenames[line_num]
+        else:
+            return imgs, self.filenames[line_num]
 
 
 def get_all_train(reader):
@@ -117,7 +119,7 @@ def train_generator(reader, splitter, batch_size, included_columns=[], new_colum
     current_train_mask = splitter.current_train_mask
 
     datagen = ImageDataGenerator(
-        rotation_range=15,
+        #rotation_range=15,
         width_shift_range=0.2,
         height_shift_range=0.2,
         shear_range=0.2,
@@ -223,10 +225,20 @@ def val_generator(reader, splitter, batch_size):
 
 def test_generator(reader, batch_size):
     start = 0
+    l = len(reader.images)
     while True:
         # idx = val_idx[start:(start+batch_size)%len(val_idx)]
         # start += batch_size
-        imgs, _ = reader.read_line_hdf(range(start, start + batch_size))
+        if start + batch_size > l:
+            end = start + batch_size - l
+            select = np.concatenate([np.arange(start, l).astype(int), np.arange(end).astype(int)])
+        else:
+            select = np.arange(start, start + batch_size).astype(int)
+        
+        select = list(select)
+        select.sort()
+        
+        imgs,_ = reader.read_line_hdf(select)
         start += batch_size
 
         yield (np.array(imgs))
