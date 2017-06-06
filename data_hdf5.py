@@ -6,7 +6,7 @@ import numpy as np
 from keras.preprocessing.image import ImageDataGenerator
 from spectral import *
 from tqdm import tqdm
-
+import pdb
 import data as dat
 
 LABELS = dat.LABELS
@@ -20,11 +20,15 @@ class Validation_splitter:
         validation data) and csv to train data
     '''
 
-    def __init__(self, path, percentage, mask=None):
-
+    def __init__(self, path, percentage):
+        '''
+        @params:
+        -path: Path to your .h5 file
+        -percentage: Percentage of your data to be used for validation (~0.2)
+        '''
+        
         file = h5py.File(path, "r")
         ids = file["filenames"]
-        self.mask = mask
         self.row_nums = np.arange(len(ids))
         self.percentage = percentage
         self.num_fold = 0
@@ -32,6 +36,12 @@ class Validation_splitter:
         self.fold_size = int(len(self.row_nums) * percentage)
 
     def next_fold(self):
+        '''
+        Calls the next crossval fold.
+        
+        @return:
+        returns True when the next fold was initiated succesfully, False otherwise.
+        '''
         if self.num_folds > self.num_fold:
             if self.num_folds > self.num_fold + 1:
                 select = np.arange(self.num_fold * self.fold_size, self.num_fold * self.fold_size + self.fold_size)
@@ -43,12 +53,6 @@ class Validation_splitter:
             train_select[select] = False
             self.train_idx = self.row_nums[train_select]
 
-            if self.mask:
-                self.current_train_mask = self.mask[train_select]
-                self.current_val_mask = self.mask[select]
-            else:
-                self.current_train_mask = None
-                self.current_val_mask = None
             self.num_fold += 1
             return True
         else:
@@ -56,7 +60,17 @@ class Validation_splitter:
 
 
 class HDF_line_reader:
+    '''
+    Reads lines from a HDF5 matrix
+    '''
     def __init__(self, path, load_rgb=False, img_size=256):
+        '''
+        @params:
+        -path: Path to your .h5 file
+        -load_rgb: True if the image format is rgb, false for bgr.
+        -img_size: Desired output height/width
+        
+        '''
         file = h5py.File(path, "r")
         self.images = file['imgs']
         self.test = False
@@ -65,12 +79,25 @@ class HDF_line_reader:
         else:
             self.labels = file['labels']
         self.filenames = file['filenames']
+        fun = np.vectorize(lambda x: x.decode('utf-8'))
+        self.filenames = fun(self.filenames)
+
         self.rgb = load_rgb
         self.img_size = img_size
 
-    def read_line_hdf(self, line_num, img_size=256):
-        imgs = get_rgb(self.images[line_num], [2, 1, 0]) if self.rgb else self.images[line_num]
-
+    def read_line_hdf(self, line_num):
+        '''
+        Reading operator
+        @params:
+        linu_num: int or list of indices of which files to read
+        
+        @returns:
+        -imgs: [len(line_num),size,size,4] array of pixel values
+        -labels: [len(line_num)] np array of class labels
+        -filenames: [lin(line_num)] array of file names.
+        
+        '''
+        imgs = map(lambda x: get_rgb(x,[2,1,0]), self.images[line_num]) if self.rgb else self.images[line_num]
         if self.img_size < 256:
             pool = ThreadPool(4)
             imgs = pool.map(lambda x: cv2.resize(x, (self.img_size, self.img_size)), imgs)
@@ -83,6 +110,12 @@ class HDF_line_reader:
 
 
 def get_all_train(reader):
+    '''
+    Get all image files at once
+    
+    @params:
+    -reader: HDF_line_reader(your_dataset)
+    '''
     d = reader.images
     l = reader.labels
     file_ids = reader.filenames
@@ -98,6 +131,12 @@ def get_all_test(reader):
 
 
 def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
+    '''
+    Get entire validation set at once
+    
+    @params:
+    -reader: CSV_reader(your_dataset)
+    '''
     val_idx = splitter.val_idx
     d = []
     l = []
@@ -113,18 +152,19 @@ def get_all_val(data_dir, reader, splitter, img_size=256, load_rgb=False):
     return np.array(d), np.array(l)
 
 
-def train_generator(reader, splitter, batch_size, included_columns=[], new_columns={}):
+def train_generator(reader, splitter, batch_size):
     '''
+    train_generator functional to be passed to keras.model.fit_generator(). Generates 
+    training images with data augmentation
     
-    :param reader: 
-    :param splitter: 
+    :param reader: HDF_line_reader(your_dataset)
+    :param splitter: Validation_splitter() object 
     :param batch_size: 
-    :param included_columns: If empty, we want to include all columns
+
     :return: 
     '''
 
     train_idx = splitter.train_idx
-    current_train_mask = splitter.current_train_mask
 
     datagen = ImageDataGenerator(
         # rotation_range=15,
@@ -146,8 +186,7 @@ def train_generator(reader, splitter, batch_size, included_columns=[], new_colum
         else:
             select = np.arange(start, start + num).astype(int)
         idx = train_idx[select]
-        if current_train_mask:
-            mask_idx = current_train_mask[select]
+
         idx.sort()
         start += num
         if start > len(train_idx): start = start - len(train_idx)
@@ -156,22 +195,6 @@ def train_generator(reader, splitter, batch_size, included_columns=[], new_colum
         l = []
 
         imgs, labels, _ = reader.read_line_hdf(list(idx))
-
-        if new_columns:
-            for key, value in new_columns.items():
-                indeces = []
-                for c in value:
-                    indeces.append(LABELS[c])
-                # TODO think about if we need the column name
-
-                labels = np.append(labels, np.expand_dims(np.any(labels[:, indeces], axis=1), axis=1), axis=1)
-
-        if included_columns:
-            # Cut away all uninportant class labels from y:
-            lbls = np.zeros((len(LABELS.keys())))
-            for lbl in (included_columns):
-                lbls[LABELS[lbl]] = True  # TODO: make 1-dimensional
-            labels = labels[:, lbls.astype(np.bool)]
 
         d.extend(imgs)
         l.extend(labels)
@@ -183,9 +206,7 @@ def train_generator(reader, splitter, batch_size, included_columns=[], new_colum
 
         cnt = 0
         for X_batch, Y_batch in datagen.flow(d, l, batch_size=batch_size):
-            if current_train_mask:
-                X_batch = X_batch[mask_idx]
-                Y_batch = Y_batch[mask_idx]
+
             yield (X_batch, Y_batch)
             cnt += batch_size
             if cnt >= num:
@@ -193,6 +214,15 @@ def train_generator(reader, splitter, batch_size, included_columns=[], new_colum
 
 
 def val_generator(reader, splitter, batch_size):
+    '''
+    val_generator functional to be passed to keras.model.evaluate_generator(). Generates 
+    validation images.
+
+    :param reader: HDF_line_reader(your_dataset)
+    :param splitter: Validation_splitter() object 
+    :param batch_size:     
+    
+    '''
     val_idx = splitter.val_idx
 
     start = 0
@@ -232,6 +262,14 @@ def val_generator(reader, splitter, batch_size):
 
 
 def test_generator(reader, batch_size):
+    '''
+    test_generator functional to be passed to keras.model.predict_generator(). Generates 
+    the prediction image data flow.
+    
+    :param reader: HDF_line_reader(your_dataset)
+    
+    '''
+    
     start = 0
     l = len(reader.images)
     while True:

@@ -43,7 +43,7 @@ class SimpleNet(Classifier_base):
     Constructor
     @params: list of all model parameters
     '''
-    def __init__(self, shape=(224, 224,3), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam'):
+    def __init__(self, shape=(224, 224,3), n_classes=2, nb_epoch = 12, lr=0.01, batch_size=64, optimizer='adam'):
         
         self.shape = shape
         self.n_classes = n_classes
@@ -158,7 +158,7 @@ class SimpleNet(Classifier_base):
 
         self.model.fit_generator(train_generator, steps_per_epoch=steps[0]//self.batch_size, 
             validation_data=validation_generator, validation_steps=steps[1]//self.batch_size,
-            callbacks=[early], epochs = self.nb_epoch, verbose = 1)
+            callbacks=[early], epochs = self.nb_epoch, max_q_size=30, verbose = 1)
 
 
 

@@ -13,29 +13,32 @@ from data_hdf5 import HDF_line_reader
 from sklearn.metrics import fbeta_score
 
 from Classifiers.simple_net import SimpleNet
-
+from Classifiers.densenet import DenseNet
 
 def main(args):
-    size = 64
-    batch_size = 96
+    size = 224
+    batch_size = 16
     nb_epoch = 5
-    optimizer = 'adadelta'
+    optimizer = 'adam'
     val_split = 0.2
     N_CLASSES = 17
     N_SAMPLES = 40479
     N_TEST = 61191
     test_batch_size = 39
 
+    img_rows, img_cols = size, size # Resolution of inputs
+    channel = 3
+
+
     labels = list(data.LABELS.keys())
     cross_val = True
 
-    classifier = SimpleNet((size,size,4), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
+    classifier = DenseNet(img_rows, img_cols, batch_size=batch_size, nb_epoch=nb_epoch, color_type=channel, num_classes=N_CLASSES)
+    
 
     splitter = Validation_splitter('input/train.h5', val_split)
-    reader = HDF_line_reader('input/train.h5', load_rgb = False, img_size=size)
-    test_reader = HDF_line_reader('input/test.h5', load_rgb=False, img_size=size)
-    #test_data, file_ids = data.get_all_test('input/test-tif-v2', img_size=size, load_rgb=True)
-    #val_data, val_labels = data.get_all_val('input/train-tif-v2', reader, splitter, img_size=size, load_rgb=True)
+    reader = HDF_line_reader('input/train.h5', load_rgb = True, img_size=size)
+    test_reader = HDF_line_reader('input/test.h5', load_rgb = True, img_size=size)
 
     result = np.zeros((N_TEST,N_CLASSES))
     while(splitter.next_fold() and cross_val):
@@ -47,7 +50,6 @@ def main(args):
         classifier.fit(tg, vg, ((1-val_split) * N_SAMPLES, val_split * N_SAMPLES))
         
         print('validating')
-        #pdb.set_trace()
         p_valid = classifier.predict(vg, np.ceil(len(splitter.val_idx) / batch_size))
         p_valid = p_valid[:len(splitter.val_idx)]
         idx = list(splitter.val_idx)
@@ -58,10 +60,10 @@ def main(args):
         print('validation loss: {}'.format(loss))
 
         print('save model:')
-        classifier.model.save(os.path.join('models', 'simple_net_{:2.2f}'.format(loss)))
+        classifier.model.save(os.path.join('models', 'dense_net_{:2.2f}'.format(loss)))
 
         thres_opt = utils.optimise_f2_thresholds(val_labels, p_valid) 
-
+        
         test_gen = data.test_generator(test_reader, test_batch_size)
         p_test = classifier.predict(test_gen, N_TEST // test_batch_size)
         result += p_test[:N_TEST]
@@ -85,7 +87,7 @@ def main(args):
     df['tags'] = preds
 
     id = 0
-    df.to_csv('ensemble/submission_ensemble{}.csv'.format(id), index=False)
+    df.to_csv('submission{}.csv'.format(id), index=False)
 
 
 if __name__ == '__main__':
