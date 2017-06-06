@@ -3,6 +3,18 @@ import numpy as np
 import pandas as pd
 
 '''
+Example code after main training loop:
+csvWriter = CSVWriter()
+for train_index, valid_index in kf:
+    X_valid = x_train[valid_index]
+    Y_valid = y_train[valid_index]
+    pred_prob = model.predict(X_valid, batch_size=128, verbose=2)
+    pred_label = np.array(1 * (pred_prob > thres_opt))
+    csvWriter.collect(valid_index, Y_valid, pred_prob, pred_label)
+csvWriter.to_csv(file="SimpleCNNtiff")
+'''
+
+'''
 Class to export validation predictions to .csv file for result analysis notebook Analysis.ipynb.
 '''
 class CSVWriter:
@@ -25,28 +37,29 @@ class CSVWriter:
               'agriculture',
               'water',
               'cloudy']
-        self.yfull_valid = []
-        self.yfull_labels = []
-        self.yfull_thresholds = []
+        self.imgs = []
+        self.ground_truths = []
+        self.pred_probs = []
+        self.pred_labels = []
 
-    def collect(self, valid_index, Y_valid, p_valid, thresholds):
-        # Collect predictions and thresholds in arrays, to be called in main loop
-        self.yfull_valid.append(p_valid)
-        self.yfull_labels.append(Y_valid)
-        self.yfull_thresholds.append(thresholds)
-        self.valid_index = valid_index
+    def collect(self, img, ground_truth, pred_prob, pred_label):
+        # Collect predictions and thresholds in lists of arrays
+        self.imgs.append(img)
+        self.ground_truths.append(ground_truth)
+        self.pred_probs.append(pred_prob)
+        self.pred_labels.append(pred_label)
 
-    def to_csv(self, valid_index, file="runname"):
+    def to_csv(self, file="runname"):
         # Write output arrays to .csv file, to be called after the main loop
-        result_valid = np.array(self.yfull_valid[2])
-        result_thresholds = np.array(self.yfull_thresholds[2])
-        result_valid_labels = np.array(1*(result_valid>result_thresholds))
-        ground_truth_valid = np.array(self.yfull_labels[2])
+        array_imgs = np.concatenate(self.imgs, axis=0)
+        array_ground_truths = np.concatenate(self.ground_truths, axis=0)
+        array_pred_probs = np.concatenate(self.pred_probs, axis=0)
+        array_pred_labels = np.concatenate(self.pred_labels, axis=0)
 
-        df_pred_prob = pd.DataFrame(result_valid, index=valid_index, columns=self.labels)
-        df_pred_lbl = pd.DataFrame(result_valid_labels, index=valid_index, columns=self.labels)
-        df_ground_truth = pd.DataFrame(ground_truth_valid, index=valid_index, columns=self.labels)
+        df_ground_truths = pd.DataFrame(array_ground_truths, index=array_imgs, columns=self.labels)
+        df_pred_probs = pd.DataFrame(array_pred_probs, index=array_imgs, columns=self.labels)
+        df_pred_labels = pd.DataFrame(array_pred_labels, index=array_imgs, columns=self.labels)
 
-        df_pred_prob.to_csv(file+'_pred_prob.csv')
-        df_pred_lbl.to_csv(file+'_pred_lbl.csv')
-        df_ground_truth.to_csv(file+'_ground_truth.csv')
+        df_ground_truths.to_csv(file + '_ground_truths.csv')
+        df_pred_probs.to_csv(file+'_pred_probs.csv')
+        df_pred_labels.to_csv(file+'_pred_lbls.csv')
