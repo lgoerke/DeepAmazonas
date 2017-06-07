@@ -10,7 +10,7 @@ splitter = d.Validation_splitter('input/train_v2.csv', 0.2)
 splitter.next_fold()
 
 #test_tiff, test_filenames = d.get_all_test('input/test-tif-v2')
-gen = d.get_train_generator('input/train-tif-v2', reader, splitter, chunk_size=5000)
+gen = d.get_train_generator_jpg('input/train-jpg', reader, splitter, chunk_size=5000)
 hdf = h5py.File('input/train.h5', 'w')
 
 dt = h5py.special_dtype(vlen=bytes)

@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 #test_tiff, test_filenames = d.get_all_test('input/test-tif-v2')
-gen = d.get_test_generator('input/test-tif-v2', chunk_size=5000)
+gen = d.get_test_generator_jpg('input/test-jpg', chunk_size=5000)
 hdf = h5py.File('input/test.h5', 'w')
 
 dt = h5py.special_dtype(vlen=bytes)

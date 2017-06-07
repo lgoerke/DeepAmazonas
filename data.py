@@ -13,6 +13,7 @@ from tqdm import tqdm
 from os import listdir
 from os.path import isfile, join
 import h5py
+import pdb
 
 labels = ['blow_down',
               'bare_ground',
@@ -69,42 +70,6 @@ REV_LABELS = { 0:'blow_down',
                16:'cloudy'
                }
 
-class Validation_splitter_hdf:
-    '''
-        Training/Validation data split utility class. Holds array with indices
-        of training and validation data as defined by percentage (percentage of
-        validation data) and csv to train data
-    '''
-    def __init__(self,csv_path,percentage):
-        with open(csv_path, 'r') as csvfile:
-            reader = csv.reader(csvfile,delimiter = ",")
-            data = list(reader)
-            ## Don't read header (-1)
-            self.row_nums = np.arange(len(data)-1)
-            np.random.shuffle(self.row_nums)
-            self.percentage = percentage
-            self.num_fold = 0
-            self.num_folds = int(1.0/percentage)
-            self.fold_size = int(len(self.row_nums)*percentage)
-    
-    def next_fold(self):
-        if self.num_folds > self.num_fold:
-            if self.num_folds > self.num_fold + 1:
-                select = np.arange(self.num_fold*self.fold_size,self.num_fold*self.fold_size + self.fold_size)           
-            else:
-                select = np.arange(self.num_fold*self.fold_size,len(self.row_nums))  
-            
-            self.val_idx = self.row_nums[select]
-            
-            train_select = np.full(len(self.row_nums), True)
-            train_select[select] = False
-            self.train_idx = self.row_nums[train_select]
-            self.num_fold += 1
-            return True
-        else:
-            return False
-
-
 ####################################################################
 ###################### For loading per images ######################
 ####################################################################
@@ -122,7 +87,7 @@ class Validation_splitter:
             data = list(reader)
             ## Don't read header (-1)
             self.row_nums = np.arange(len(data) - 1)
-            np.random.shuffle(self.row_nums)
+            #np.random.shuffle(self.row_nums)
             self.percentage = percentage
             self.num_fold = 0
             self.num_folds = int(1.0 / percentage)
@@ -135,7 +100,10 @@ class Validation_splitter:
             else:
                 select = np.arange(self.num_fold * self.fold_size, len(self.row_nums))
             self.val_idx = self.row_nums[select]
-            self.train_idx = self.row_nums[~select]
+
+            train_select = np.full(len(self.row_nums), True)
+            train_select[select] = False
+            self.train_idx = self.row_nums[train_select]
             self.num_fold += 1
             return True
         else:
@@ -150,6 +118,12 @@ class CSV_line_reader:
         ## Because header was deleted in indices, read next line always
         return self.content[line_num + 1][0], self.content[line_num + 1][1]
 
+def load_single_jpg(dir, file_path, img_size):
+
+    open_path = os.path.join(dir, file_path + '.jpg')
+    img = skio.imread(open_path)
+
+    return cv2.resize(img, (img_size, img_size))
 
 def load_single_tif(dir, file_path, img_size, to_255=False):
     '''
@@ -192,6 +166,22 @@ def load_tif_as_rgb(dir, file_path, img_size, to_255=False):
 
     return cv2.resize(img_scaled, (img_size, img_size))
 
+def get_test_generator_jpg(data_dir, img_size=256, chunk_size=500):
+    files = [os.path.splitext(f)[0] for f in listdir(data_dir) if isfile(join(data_dir, f))]
+
+    k = 0 
+    for i in range(0,len(files),chunk_size):
+        d = []
+        file_ids = []
+        for j in range(chunk_size):
+            if k < len(files):
+                f = files[k]
+                k += 1
+                file_ids.append(f)
+                loaded = load_single_jpg(data_dir, f, img_size)
+                d.append(loaded)
+        yield(np.array(d), np.array(file_ids))        
+
 def get_test_generator(data_dir, img_size=256, load_rgb=False, chunk_size=500):
     files = [os.path.splitext(f)[0] for f in listdir(data_dir) if isfile(join(data_dir, f))]
 
@@ -210,6 +200,27 @@ def get_test_generator(data_dir, img_size=256, load_rgb=False, chunk_size=500):
                     loaded, _ = load_single_tif(data_dir, f, img_size)
                     d.append(loaded)
         yield(np.array(d), np.array(file_ids))        
+
+def get_train_generator_jpg(data_dir, reader, splitter, img_size=256, chunk_size=500):
+    val_idx = splitter.val_idx
+    train_idx = splitter.train_idx
+
+    all_idx = np.concatenate((val_idx, train_idx), axis=0)
+    k = 0
+    for i in range(0, len(all_idx), chunk_size):
+        d = []
+        l = []
+        file_ids = []
+        for j in range(chunk_size):
+            if k < len(all_idx):
+                idx = all_idx[k]
+                k += 1
+                f = reader.read_line_csv(idx)[0]
+                file_ids.append(f)
+                loaded = load_single_jpg(data_dir, f, img_size)
+                d.append(loaded)
+                l.append(to_one_hot(reader.read_line_csv(idx)[1]))
+        yield(np.array(d), np.array(l), np.array(file_ids))
 
 def get_train_generator(data_dir, reader, splitter, img_size=256, load_rgb=False, chunk_size=500):
     val_idx = splitter.val_idx
