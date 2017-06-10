@@ -6,7 +6,6 @@ import random
 from tqdm import tqdm
 import xgboost as xgb
 import pickle
-
 import scipy
 
 from PIL import Image
@@ -35,11 +34,11 @@ def run_model(data=None, labels=None, train_index=None, val_index=None, num_labe
     global best
     global model
 
-    n_estimators = params[0]
+    n_estimators = int(params[0])
     lr = params[1]
     min_child_weight = params[2]
-    max_depth = params[3]
-    params = {'n_estimators': n_estimators, 'lr':lr,'min_child_weight':min_child_weight,'max_depth':max_depth}
+    max_depth = int(params[3])
+    params = {'n_estimators': n_estimators, 'lr':lr, 'min_child_weight':min_child_weight, 'max_depth':max_depth}
 
     # Get training and validation set
     train_data = data[train_index]
@@ -49,13 +48,13 @@ def run_model(data=None, labels=None, train_index=None, val_index=None, num_labe
 
     # Parameters doc: http://xgboost.readthedocs.io/en/latest/parameter.html
     # https://www.analyticsvidhya.com/blog/2016/03/complete-guide-parameter-tuning-xgboost-with-codes-python/
-    xgb_model = xgb.XGBClassifier(max_depth=max_depth, learning_rate=lr, n_estimators=n_estimators, \
-                              min_child_weight=min_child_weight, \
+    xgb_model = xgb.XGBClassifier(max_depth=max_depth, learning_rate=lr, n_estimators=n_estimators,
+                              min_child_weight=min_child_weight,
                             scale_pos_weight=1, base_score=0.5, objective='binary:logistic')
 
 
     xgb_model.fit(train_data, train_labels)
-    labels_pred = xgb_model.predict(val_data)
+    labels_pred = xgb_model.predict_proba(val_data)[: , 1]
 
     loss = mean_squared_error(val_labels, labels_pred) # Use weights to fight class imbalance?
 
@@ -69,8 +68,6 @@ def run_model(data=None, labels=None, train_index=None, val_index=None, num_labe
 
 #############################################################
 #############################################################
-
-
 
 
 def extract_features(df, data_path):
@@ -156,19 +153,19 @@ def extract_features(df, data_path):
 
 
 # Extract features
-print('Extracting train features')
-train_features = extract_features(train_labels, train_path)
-print('Extracting test features')
-test_features = extract_features(test_labels, test_path)
+#print('Extracting train features')
+#train_features = extract_features(train_labels, train_path)
+#print('Extracting test features')
+#test_features = extract_features(test_labels, test_path)
 # Save features
-with open('train_features.out', 'wb') as outfile:
-    pickle.dump(train_features, outfile)
-with open('test_features.out', 'wb') as outfile:
-    pickle.dump(test_features, outfile)
-#with open('train_features.out', 'rb') as data_file:
-#    train_features = pickle.load(data_file)
-#with open('test_features.out', 'rb') as data_file:
-#    test_features = pickle.load(data_file)
+#with open('train_features.out', 'wb') as outfile:
+#    pickle.dump(train_features, outfile)
+#with open('test_features.out', 'wb') as outfile:
+#    pickle.dump(test_features, outfile)
+with open('train_features.out', 'rb') as data_file:
+    train_features = pickle.load(data_file)
+with open('test_features.out', 'rb') as data_file:
+    test_features = pickle.load(data_file)
 
 
 
@@ -211,6 +208,7 @@ X_test = np.array(test_features.drop(['image_name', 'tags'], axis=1))
 # Reserve memory space
 y_pred = np.zeros((X_test.shape[0], n_classes))
 
+
 print('Training and making predictions')
 for class_i in tqdm(range(n_classes), miniters=1):
 
@@ -234,12 +232,11 @@ for class_i in tqdm(range(n_classes), miniters=1):
              hp.choice('max_depth', np.arange(2, 9+1, dtype=int))
              ]
 
-    best_run = fmin(run, space, algo=tpe.suggest, max_evals=250)
+    best_run = fmin(run, space, algo=tpe.suggest, max_evals=5)
 
     print(best_run)
 
     y_pred[:, class_i] = model.predict_proba(X_test)[:, 1]
-
 
 
 #TODO Check why this 0.2 is here
@@ -248,5 +245,9 @@ preds = [' '.join(labels[y_pred_row > 0.2]) for y_pred_row in y_pred]
 subm = pd.DataFrame()
 subm['image_name'] = test_features.image_name.values
 subm['tags'] = preds
-subm.to_csv('submission.csv', index=False)
+subm.to_csv('../submission_xgb.csv', index=False)
+
+raw_pred = pd.DataFrame (y_pred)
+raw_pred.to_csv('../raw_pred_xgb.csv', index=False)
+
 
