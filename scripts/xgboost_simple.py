@@ -232,7 +232,7 @@ for class_i in tqdm(range(n_classes), miniters=1):
              hp.choice('max_depth', np.arange(2, 9+1, dtype=int))
              ]
 
-    best_run = fmin(run, space, algo=tpe.suggest, max_evals=5)
+    best_run = fmin(run, space, algo=tpe.suggest, max_evals=250)
 
     print(best_run)
 
