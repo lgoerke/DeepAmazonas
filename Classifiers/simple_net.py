@@ -85,6 +85,7 @@ class SimpleNet(Classifier_base):
         x = self.make_block(8, kernel_size=1, stride=1, padding=0)(x)
         x = self.make_block(8, kernel_size=1, stride=1, padding=0)(x)
 
+        ''' 
         x = self.make_block(32, kernel_size=3, stride=1, padding=1)(x)
         x = self.make_block(32, kernel_size=1, stride=1, padding=0)(x)
         x = self.make_block(32, kernel_size=1, stride=1, padding=0)(x)
@@ -99,18 +100,18 @@ class SimpleNet(Classifier_base):
         x = self.make_block(64, kernel_size=1, stride=1, padding=0)(x)
         x = self.make_block(64, kernel_size=3, stride=1, padding=1)(x)
         x = MaxPooling2D(pool_size=2, strides=2, padding="same")(x)
-        x = Dropout(0.25)(x)
+        x = Dropout(0.25)(x)'''
 
         outa = AveragePooling2D(self.shape[0] // 4)(x)
         outa = Flatten()(outa)
 
         x = self.make_block(128, kernel_size=3, stride=1, padding=1)(x)
         x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
-        x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
-        x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
-        x = self.make_block(128, kernel_size=3, stride=1, padding=1)(x)
-        x = MaxPooling2D(pool_size=2, strides=2, padding="same")(x)
-        x = Dropout(0.50)(x)
+        #x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
+        #x = self.make_block(128, kernel_size=1, stride=1, padding=0)(x)
+        #x = self.make_block(128, kernel_size=3, stride=1, padding=1)(x)
+        #x = MaxPooling2D(pool_size=2, strides=2, padding="same")(x)
+        #x = Dropout(0.50)(x)
 
         outb = AveragePooling2D(self.shape[0] // 8)(x)
         outb = Flatten()(outb)

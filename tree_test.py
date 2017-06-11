@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from Classifiers.simple_net import SimpleNet
+#from Classifiers.simple_net import SimpleNet
 from skimage import io as skio
 import keras
 import cv2
@@ -16,7 +16,7 @@ from data_hdf5_tree import Validation_splitter
 from data_hdf5_tree import HDF_line_reader
 from sklearn.metrics import fbeta_score
 
-from Classifiers.simple_net import SimpleNet
+from Classifiers.simpler_net import SimpleNet
 
 LABELS = {'blow_down': 0,
           'bare_ground': 1,
@@ -69,18 +69,20 @@ def test_Tree():
     
     node_3_1_phenomena_investigator = Node('node_3_1_phenomena_investigator', [],
                     ['blow_down', 'blooming', 'slash_burn', 'selective_logging'],
-                    ['forest_phenomena'],clsfr = None,
+                    ['forest_phenomena'],add_labels = {'forest_phenomena': ['blow_down', 'blooming', 'cultivation','slash_burn', 'selective_logging']},
+                    clsfr = None,
                         validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
 
     node_2_1_forestphenomena = Node('node_2_1_forestphenomena',
                     [node_3_1_phenomena_investigator],
                     ['forest_phenomena'],
-                    ['haze', 'partly_cloudy', 'clear'],clsfr = None,
+                    ['primary'],
+                    add_labels = {'forest_phenomena': ['blow_down', 'blooming', 'slash_burn', 'selective_logging']},clsfr = None,
                         validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
 
     node_3_0_infra_investigator = Node('node_3_0_infra_investigator', [],
-                    ['conventional_mine', 'artisinal_mine', 'road'],
-                    {'infrastructure': ['conventional_mine', 'artisinal_mine', 'slash_burn','bare_ground','habitation' ]},clsfr = None,
+                    ['conventional_mine', 'artisinal_mine', 'road','slash_burn','bare_ground','habitation' ],['infrastructure'],
+                    add_labels = {'infrastructure': ['conventional_mine', 'artisinal_mine', 'slash_burn','bare_ground','habitation' ]},clsfr = None,
                         validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
 
     node_2_0_infrastructure = Node('node_2_0_infrastructure',
@@ -112,8 +114,8 @@ class Node():
 
     def __init__(self, name, children, use_labels, include_classes=None, clsfr=None,
                     validation_splitter = None, train_reader = None, test_reader = None, add_labels = [],
-                    size = 64, batch_size = 96, nb_epoch = 3,optimizer = 'adadelta',val_split = 0.2, 
-                     N_SAMPLES = 2000, N_TEST = 2000,test_batch_size = 9 ):
+                    size = 64, batch_size = 96, nb_epoch = 1,optimizer = 'adadelta',val_split = 0.3, 
+                     N_SAMPLES = 40479, N_TEST = 61191,test_batch_size = 9 ):
         '''
         @args:
         -name: Name for this node
@@ -165,29 +167,34 @@ class Node():
         y_history to use as prior input for further classification
         
         '''
-
-        if y_history is None:
-            print('Created new y-matrix')
-            y_history = np.zeros((self.N_TEST,len(LABELS.keys())))
-
-        X_mask = np.ones((self.N_TEST))
-        if self.include_classes:
-            X_mask[:] = 0
-            for cls in (included_columns):
-                X_mask = np.logical_or(y_history[:,LABELS[cls]]>0.5,X_mask) 
-
-
-        test_gen = data.test_generator(self.test_reader, test_batch_size)
-        p_test = self.clsfr.predict(test_gen, self.N_TEST // test_batch_size)
-
-        lbls = np.zeros((len(LABELS.keys())))
-        for lbl in (self.use_labels):
-            lbls[LABELS[lbl]] = True
-
-        p_test = np.multiply(p_test,np.repeat(np.expand_dims(X_mask,axis = 1),4,axis=1))
-
-        for n, i in enumerate(np.where(X_mask)[0]):
-            y_history[i, :][lbls.astype(np.bool)[:]] = y_history[i, :][lbls.astype(np.bool)[:]] + p_test[n,:] 
+        
+        if self.validation_splitter is not None:
+            if y_history is None:
+                print('Created new y-matrix')
+                y_history = np.zeros((self.N_TEST,len(LABELS.keys())))
+    
+            X_mask = np.ones((self.N_TEST))
+            if self.include_classes:
+                X_mask[:] = 0
+                for cls in (self.include_classes):
+                    X_mask = np.logical_or(y_history[:,LABELS[cls]]>0.3,X_mask) 
+    
+    
+            test_gen = data.test_generator(self.test_reader, test_batch_size)
+            p_test = self.clsfr.predict(test_gen, self.N_TEST // test_batch_size)
+    
+            
+            if self.use_labels:
+                lbls = np.zeros((len(LABELS.keys())))    
+                for lbl in (self.use_labels):
+                    lbls[LABELS[lbl]] = True
+            else:
+                lbls = np.ones((len(LABELS.keys()))) 
+        
+            p_test = np.multiply(p_test,np.repeat(np.expand_dims(X_mask,axis = 1),len(self.use_labels),axis=1))
+    
+            for n, i in enumerate(np.where(X_mask)[0]):
+                y_history[i, :][lbls.astype(np.bool)[:]] = y_history[i, :][lbls.astype(np.bool)[:]] + p_test[n,:] 
             
 
 
@@ -214,26 +221,32 @@ class Node():
         Train this node's classifier
         
         '''
-
-        self.validation_splitter.next_fold()
-        tg = data.train_generator(self.train_reader, self.validation_splitter, self.batch_size,  
-                                use_labels =self.use_labels , new_columns= self.add_labels,included_columns = self.include_classes )
-        vg = data.val_generator(self.train_reader, self.validation_splitter, self.batch_size,  
-                                use_labels=self.use_labels , new_columns= self.add_labels,included_columns = self.include_classes )
+        if self.validation_splitter is not None:
+            
+            tg = data.train_generator(self.train_reader, self.validation_splitter, self.batch_size,  
+                                    use_labels =self.use_labels , new_columns= self.add_labels,included_columns = self.include_classes )
+            vg = data.val_generator(self.train_reader, self.validation_splitter, self.batch_size,  
+                                    use_labels=self.use_labels , new_columns= self.add_labels,included_columns = self.include_classes )
+            
+            print('training ',self.name, ' on ', self.use_labels)             
+            self.clsfr.fit(tg, vg, ((1-self.val_split) * self.N_SAMPLES, self.val_split * self.N_SAMPLES))
         
-        print('training ',self.name, ' on ', self.use_labels)             
-        self.clsfr.fit(tg, vg, ((1-self.val_split) * self.N_SAMPLES, self.val_split * self.N_SAMPLES))
+        
 
-
-    def train_rec(self):
+    def train_rec(self, save_clf = False):
         '''
         Train this clsfr and its children recursively
         '''
 
         self.train()
-
+        
+        if save_clf:
+            self.save('')
+        
         for child in self.children:
-            child.train_rec()
+            child.train_rec(save_clf)
+            
+        
 
     def save(self, path):
         '''
