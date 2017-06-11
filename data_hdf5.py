@@ -120,6 +120,9 @@ def get_all_train(reader):
     l = reader.labels
     file_ids = reader.filenames
 
+    #indices = list(np.arange(len(l)))
+    #d = reader.read_line_hdf(indices)
+	
     return d, l, file_ids
 
 

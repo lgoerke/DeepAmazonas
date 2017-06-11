@@ -16,21 +16,27 @@ from data_hdf5 import Validation_splitter
 
 
 def create_predictions(modellist, val_split):
-    reader = HDF_line_reader('input/train.h5', load_rgb=False)
-    all_data, all_labels, _ = d.get_all_train(reader)
 
-    reader = HDF_line_reader('input/test.h5', load_rgb=False)
-    all_test, test_files = d.get_all_test(reader)
+    predictions_train = np.zeros((len(modellist), 40479, 17))
+    predictions_test = np.zeros((len(modellist), 61191, 17))
 
-    predictions_train = np.zeros((len(modellist), len(all_data), 17))
-    predictions_test = np.zeros((len(modellist), len(all_test), 17))
+    batch_size=16
+    splitter = Validation_splitter('input/train.h5',1)
+    splitter.next_fold()
 
     for i, m in enumerate(modellist):
-        classifier = keras.models.load_model(os.path.join('models', m))
-        predictions_train[i, :, :] = classifier.predict(all_data)
-        predictions_test[i, :, :] = classifier.predict(all_test)
+        reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
+        tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
 
-    return predictions_train, all_labels, predictions_test, test_files
+        reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
+        test_g =d.test_generator(reader=reader_test,batch_size=batch_size)
+
+        classifier = keras.models.load_model(os.path.join('models', m))
+        #print(classifier.model.getShape())
+        predictions_train[i, :, :] = classifier.predict(tg,batch_size)
+        predictions_test[i, :, :] = classifier.predict(test_g,batch_size)
+
+    return predictions_train, reader_train.labels, predictions_test, reader_test.filenames
 
 
 def train_ensemble(predictions_train, all_labels, id):
@@ -82,6 +88,7 @@ def predict_with_ensemble(predictions_test, mode='mean'):
 
 def ensemble(args):
     mlist = args.modellist
+    img_sizes = args.img_sizes
     val_split = args.val_split
     mode = args.mode
     id = args.id
@@ -136,12 +143,14 @@ def ensemble(args):
 
 if __name__ == '__main__':
     mlist = ['simple_net_0.68','simple_net_0.48']
+    # List with same size as mlist
+    img_sizes = [64,64]
     csv_files = []
     #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
     val_split = 0.2
     mode = 'mean'
     id = '2ndTry'
     thres_opt = 0.4
-    args = Namespace(val_split=val_split, modellist=mlist, mode=mode, id=id, thres_opt=thres_opt, csv_files=csv_files)
+    args = Namespace(val_split=val_split, modellist=mlist, img_sizes = img_sizes, mode=mode, id=id, thres_opt=thres_opt, csv_files=csv_files)
 
     ensemble(args)
