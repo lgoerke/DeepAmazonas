@@ -4,7 +4,7 @@ from argparse import Namespace
 import keras
 import numpy as np
 import pandas as pd
-import tqdm
+from tqdm import tqdm
 from keras.callbacks import ModelCheckpoint
 from keras.layers.core import Dense
 from keras.models import Sequential
@@ -19,22 +19,32 @@ def create_predictions(modellist, val_split):
 
     predictions_train = np.zeros((len(modellist), 40479, 17))
     predictions_test = np.zeros((len(modellist), 61191, 17))
+    one_third = 13493
 
-    batch_size=16
-    splitter = Validation_splitter('input/train.h5',1)
-    splitter.next_fold()
+    batch_size=103
 
     for i, m in enumerate(modellist):
-        reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
-        tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
+        splitter = Validation_splitter('input/train.h5', 1.0/3.0)
+        print(splitter.num_folds)
+        print(splitter.fold_size)
 
-        reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
-        test_g =d.test_generator(reader=reader_test,batch_size=batch_size)
 
+        print('Loading model ',m)
         classifier = keras.models.load_model(os.path.join('models', m))
-        #print(classifier.model.getShape())
-        predictions_train[i, :, :] = classifier.predict(tg,batch_size)
-        predictions_test[i, :, :] = classifier.predict(test_g,batch_size)
+        
+        print('Create predictions')
+        for j in tqdm(range(3)):
+            splitter.next_fold()
+
+            reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
+            tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
+
+            reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
+            test_g =d.test_generator(reader=reader_test,batch_size=batch_size)
+
+            #print(classifier.model.getShape())
+            predictions_train[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(tg,one_third//batch_size)
+            predictions_test[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(test_g,one_third//batch_size)
 
     return predictions_train, reader_train.labels, predictions_test, reader_test.filenames
 
@@ -142,9 +152,9 @@ def ensemble(args):
 
 
 if __name__ == '__main__':
-    mlist = ['simple_net_0.68','simple_net_0.48']
+    mlist = ['simple_net_0.68','dense_net_0.68']
     # List with same size as mlist
-    img_sizes = [64,64]
+    img_sizes = [64,224]
     csv_files = []
     #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
     val_split = 0.2
