@@ -154,7 +154,7 @@ class Node():
 
         return SimpleNet((self.size,self.size,4), n_classes=len(self.use_labels), nb_epoch = self.nb_epoch, batch_size=self.batch_size, optimizer=self.optimizer)
 
-    def apply(self, y_history=None, test_batch_size = 20):
+    def apply(self, y_history=None, test_batch_size = 20, validate = False):
         '''
         Apply this node's classifier on X using the prior information y_history 
         from earlier classifiers.
@@ -167,6 +167,11 @@ class Node():
         y_history to use as prior input for further classification
         
         '''
+
+        if validate:
+            reader = self.train_reader
+        else:
+            reader = self.test_reader
         
         if self.validation_splitter is not None:
             if y_history is None:
@@ -180,7 +185,7 @@ class Node():
                     X_mask = np.logical_or(y_history[:,LABELS[cls]]>0.3,X_mask) 
     
     
-            test_gen = data.test_generator(self.test_reader, test_batch_size)
+            test_gen = data.test_generator(reader, test_batch_size)
             p_test = self.clsfr.predict(test_gen, self.N_TEST // test_batch_size)
     
             
@@ -200,7 +205,7 @@ class Node():
 
         return y_history
 
-    def apply_rec(self, y_history=None):
+    def apply_rec(self, y_history=None, validation = False):
         '''
         Classify images recursively in the Node() tree
         '''
@@ -209,10 +214,10 @@ class Node():
             print('Created new y-matrix')
             y_history = np.zeros((self.N_TEST,len(LABELS.keys())))
 
-        y_history = self.apply(y_history)
+        y_history = self.apply(y_history, validation)
 
         for child in self.children:
-            y_history = child.apply_rec(y_history)
+            y_history = child.apply_rec(y_history, validation)
 
         return y_history
 
