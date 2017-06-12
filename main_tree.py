@@ -120,9 +120,9 @@ def weather_Tree():
     #labels = list(data.LABELS.keys())
 
 
-    sp = Validation_splitter('train.h5', val_split)
-    train_reader = HDF_line_reader('train.h5', load_rgb = False, img_size=size)
-    test_reader = HDF_line_reader('test.h5', load_rgb = False, img_size=size)
+    sp = Validation_splitter('input/train.h5', val_split)
+    train_reader = HDF_line_reader('input/train.h5', load_rgb = False, img_size=size)
+    test_reader = HDF_line_reader('input/test.h5', load_rgb = False, img_size=size)
     
     node_1_haze = Node('node_1_haze',
                     [],
@@ -175,7 +175,7 @@ def main(args):
     n,splitter, reader, reader_test = weather_Tree()
     #splitter = Validation_splitter('input/train.h5', val_split)
     #reader = HDF_line_reader('input/train.h5', load_rgb=True, img_size=size)
-    test_reader = HDF_line_reader('input/test.h5', load_rgb=True, img_size=size)
+    test_reader = HDF_line_reader('input/test.h5', load_rgb=False, img_size=size)
 
     result = np.zeros((N_TEST, N_CLASSES))
     while (splitter.next_fold() and cross_val):
@@ -224,3 +224,7 @@ def main(args):
 
     id = 0
     df.to_csv('submission{}.csv'.format(id), index=False)
+
+
+
+main([])

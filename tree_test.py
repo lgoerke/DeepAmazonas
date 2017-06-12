@@ -16,7 +16,7 @@ from data_hdf5_tree import Validation_splitter
 from data_hdf5_tree import HDF_line_reader
 from sklearn.metrics import fbeta_score
 
-from Classifiers.simpler_net import SimpleNet
+from Classifiers.simple_net import SimpleNet
 
 LABELS = {'blow_down': 0,
           'bare_ground': 1,
@@ -152,7 +152,7 @@ class Node():
     def __init_clsfr__(self, size=None):
         '''Create a new classifier object bound to this node'''
 
-        return SimpleNet((self.size,self.size,4), n_classes=len(self.use_labels), nb_epoch = self.nb_epoch, batch_size=self.batch_size, optimizer=self.optimizer)
+        return SimpleNet((self.size,self.size,3), n_classes=len(self.use_labels), nb_epoch = self.nb_epoch, batch_size=self.batch_size, optimizer=self.optimizer)
 
     def apply(self, y_history=None, test_batch_size = 20, validate = False):
         '''
