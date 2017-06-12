@@ -120,7 +120,12 @@ def weather_Tree():
     #labels = list(data.LABELS.keys())
 
 
-    sp = Validation_splitter('input/train.h5', val_split)
+    sp_haze = Validation_splitter('input/train.h5', val_split)
+    sp_clear = Validation_splitter('input/train.h5', val_split)
+    sp_partly_cloudy = Validation_splitter('input/train.h5', val_split)
+
+    splitters = [sp_clear,sp_haze,sp_partly_cloudy]
+
     train_reader = HDF_line_reader('input/train.h5', load_rgb = False, img_size=size)
     test_reader = HDF_line_reader('input/test.h5', load_rgb = False, img_size=size)
     
@@ -130,7 +135,7 @@ def weather_Tree():
           'artisinal_mine','primary','slash_burn','habitation','road','selective_logging',
           'agriculture','water'],
                     ['haze'],clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
+                        validation_splitter = sp_haze, train_reader = train_reader, test_reader = test_reader)
     
     node_2_clear = Node('node_2_clear',
                     [],
@@ -138,7 +143,7 @@ def weather_Tree():
           'artisinal_mine','primary','slash_burn','habitation','road','selective_logging',
           'agriculture','water'],
                     ['clear'],clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
+                        validation_splitter = sp_clear, train_reader = train_reader, test_reader = test_reader)
                         
     node_3_partly_cloudy = Node('node_3_partly_cloudy',
                     [],
@@ -146,13 +151,13 @@ def weather_Tree():
           'artisinal_mine','primary','slash_burn','habitation','road','selective_logging',
           'agriculture','water'],
                     ['partly_cloudy'],clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
+                        validation_splitter = sp_partly_cloudy, train_reader = train_reader, test_reader = test_reader)
                                   
     
     node_0_weather = Node('node_0_weather', [node_1_haze,node_2_clear,node_3_partly_cloudy], ['cloudy', 'haze', 'partly_cloudy', 'clear'],clsfr = None,
                         validation_splitter = None, train_reader = train_reader, test_reader = test_reader)
 
-    return node_0_weather,sp, test_reader, train_reader
+    return node_0_weather,splitters
 
 
 def main(args):
@@ -172,23 +177,25 @@ def main(args):
     labels = list(data.LABELS.keys())
     cross_val = True
 
-    n,splitter, reader, reader_test = weather_Tree()
+    n,splitters, reader, reader_test = weather_Tree()
     #splitter = Validation_splitter('input/train.h5', val_split)
     #reader = HDF_line_reader('input/train.h5', load_rgb=True, img_size=size)
     test_reader = HDF_line_reader('input/test.h5', load_rgb=False, img_size=size)
 
     result = np.zeros((N_TEST, N_CLASSES))
-    while (splitter.next_fold() and cross_val):
+    while (splitters[0].next_fold() and cross_val):
         #tg = data.train_generator(reader, splitter, batch_size)
         #vg = data.val_generator(reader, splitter, batch_size)
+        for i in range(len(splitters-1)):
+            splitters[i+1].next_fold()
 
         print('start training: ')
         #classifier.fit(tg, vg, ((1 - val_split) * N_SAMPLES, val_split * N_SAMPLES))
         n.train_rec(True)
         print('validating')
         p_valid = n.apply_rec(validation = True)#.predict(vg, np.ceil(len(splitter.val_idx) / batch_size))
-        p_valid = p_valid[:len(splitter.val_idx)]
-        idx = list(splitter.val_idx)
+        p_valid = p_valid[:len(splitters[0].val_idx)]
+        idx = list(splitters[0].val_idx)
         idx.sort()
         val_labels = reader.labels[idx]
 
@@ -206,7 +213,7 @@ def main(args):
 
         cross_val = False
 
-    result /= splitter.num_folds
+    result /= splitters[0].num_folds
     result = pd.DataFrame(result, columns=labels)
 
     preds = []
