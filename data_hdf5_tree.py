@@ -7,7 +7,7 @@ from keras.preprocessing.image import ImageDataGenerator
 from spectral import *
 from tqdm import tqdm
 import utils
-
+import copy
 import data_hdf5
 from data_hdf5 import Validation_splitter, HDF_line_reader, test_generator
 import data as dat
@@ -32,7 +32,6 @@ def train_generator(reader, splitter, batch_size, use_labels = [], included_colu
     '''
 
     train_idx = splitter.train_idx
-    current_train_mask = splitter.current_train_mask
 
     datagen = ImageDataGenerator(
         rotation_range=15,
@@ -54,8 +53,7 @@ def train_generator(reader, splitter, batch_size, use_labels = [], included_colu
         else:
             select = np.arange(start, start + num).astype(int)
         idx = train_idx[select]
-        if current_train_mask:
-            mask_idx = current_train_mask[select]
+
         idx.sort()
         start += num
         if start > len(train_idx): start = start - len(train_idx)
@@ -63,8 +61,9 @@ def train_generator(reader, splitter, batch_size, use_labels = [], included_colu
         
         d = []
         l = []
-
+        
         imgs, labels, _ = reader.read_line_hdf(list(idx))
+        LABELS = copy.copy(dat.LABELS)
         if new_columns:
             for key, value in new_columns.items():
                 indeces = []
@@ -78,9 +77,10 @@ def train_generator(reader, splitter, batch_size, use_labels = [], included_colu
                 
         if included_columns:
             #create a  mask to cut out all unwanted images
-            mask_idx = np.zeros(len(idx))
+            mask_idx = np.zeros(len(labels))
             
             for cls in (included_columns):
+                #print(mask_idx.shape,labels.shape,LABELS,cls)
                 mask_idx = np.logical_or(labels[:,LABELS[cls]],mask_idx)
 
 
@@ -91,35 +91,55 @@ def train_generator(reader, splitter, batch_size, use_labels = [], included_colu
             for lbl in (use_labels):
                 lbls[LABELS[lbl]] = True  # TODO: make 1-dimensional
             labels = labels[:, lbls.astype(np.bool)]
-
+        
+        
             
         d.extend(imgs)
         l.extend(labels)
 
+
         
         d = np.array(d)
         l = np.array(l)
+        
+        
+        
+        if included_columns:
+            d = d[mask_idx]
+            l = l[mask_idx]
 
         datagen.fit(d)
-        
+                
         if new_columns:        
             for key,_ in new_columns.items():
                 del LABELS[key]
+                
+        print(d.shape, l.shape, mask_idx.sum())
         
         cnt = 0
         advance = 0
         for X_batch, Y_batch in datagen.flow(d, l, batch_size=batch_size):
-            if current_train_mask or included_columns:
 
-                X_batch = X_batch[mask_idx[advance:(advance+batch_size)]]
-                Y_batch = Y_batch[mask_idx[advance:(advance+batch_size)]]
-
+                
             yield (X_batch, Y_batch)
             cnt += Y_batch.shape[0]
             advance += batch_size
-            if cnt >= num:
+            if advance >= num :
+                
                 break
-
+            #if included_columns:
+                
+                #X_batch = X_batch[mask_idx[advance:(advance+batch_size)]]
+                #Y_batch = Y_batch[mask_idx[advance:(advance+batch_size)]]
+                                
+                '''#print(np.max(X_batch))
+                for i in range(X_batch.shape[0]):
+                    np.save('/media/sebastian/MYLINUXLIVE/4/imgs1/'+str(i+cnt),X_batch[i,:,:,:])
+                    
+                    #plt.subplot(10,10,i+1)
+                    #plt.imshow(X_batch[i,:,:,:]*256,aspect = 'auto')
+                #plt.show()
+                adsf'''
 
 def val_generator(reader, splitter, batch_size, use_labels = [],included_columns=[], new_columns={}):
     '''
@@ -132,7 +152,6 @@ def val_generator(reader, splitter, batch_size, use_labels = [],included_columns
     
     '''
     val_idx = splitter.val_idx
-    current_train_mask = splitter.current_train_mask
 
 
     start = 0
@@ -157,6 +176,7 @@ def val_generator(reader, splitter, batch_size, use_labels = [],included_columns
 
         imgs, labels, _ = reader.read_line_hdf(list(idx))
         
+        LABELS = copy.copy(dat.LABELS)
         if new_columns:
             for key, value in new_columns.items():
                 indeces = []
@@ -171,7 +191,11 @@ def val_generator(reader, splitter, batch_size, use_labels = [],included_columns
             mask_idx = np.zeros(len(idx))
             
             for cls in (included_columns):
-                mask_idx = np.logical_or(labels[:,LABELS[cls]],mask_idx)          
+                #print(mask_idx.shape,labels.shape,LABELS,cls)
+                try:
+                    mask_idx = np.logical_or(labels[:,LABELS[cls]],mask_idx) 
+                    #print('good!')
+                except: break
             
             
         if use_labels :
@@ -187,6 +211,11 @@ def val_generator(reader, splitter, batch_size, use_labels = [],included_columns
         d = np.array(d)
         l = np.array(l)
         
+        
+        if included_columns:
+            d = d[mask_idx]
+            l = l[mask_idx]
+        
         if new_columns:        
             for key,_ in new_columns.items():
                 del LABELS[key]
@@ -196,17 +225,10 @@ def val_generator(reader, splitter, batch_size, use_labels = [],included_columns
         cnt = 0
         advance = 0
         num_batches = len(d) / batch_size
+        if num_batches == 0:
+            break
         for batch in range(int(num_batches)):
-            
-            d_batch = np.array(d[advance:advance+batch_size])
-            l_batch = np.array(l[advance:advance+batch_size]) 
-                           
-            if current_train_mask or included_columns:
-                d_batch = d_batch[mask_idx[advance:advance+batch_size]]
-                l_batch = l_batch[mask_idx[advance:advance+batch_size]]
-
-            yield(d_batch,l_batch)
-            cnt += l_batch.shape[0]
-            advance+=batch_size
-            if cnt >= num: 
+            yield (np.array(d[cnt:cnt + batch_size]), np.array(l[cnt:cnt + batch_size]))
+            cnt += batch_size
+            if cnt >= num:
                 break
