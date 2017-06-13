@@ -19,22 +19,31 @@ def create_predictions(modellist, val_split):
 
     predictions_train = np.zeros((len(modellist), 40479, 17))
     predictions_test = np.zeros((len(modellist), 61191, 17))
+    one_third = 13493
 
-    batch_size=16
-    splitter = Validation_splitter('input/train.h5',1)
-    splitter.next_fold()
+    batch_size=103
 
     for i, m in enumerate(modellist):
-        reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
-        tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
+        splitter = Validation_splitter('input/train.h5', 1.0/3.0)
+        print(splitter.num_folds)
+        print(splitter.fold_size)
 
-        reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
-        test_g =d.test_generator(reader=reader_test,batch_size=batch_size)
-
+        print('Loading model ', m)
+        classifier = []
         classifier = keras.models.load_model(os.path.join('models', m))
-        #print(classifier.model.getShape())
-        predictions_train[i, :, :] = classifier.predict(tg,batch_size)
-        predictions_test[i, :, :] = classifier.predict(test_g,batch_size)
+
+        for j in range(3):
+            splitter.next_fold()
+
+            reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
+            tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
+
+            reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
+            test_g =d.test_generator(reader=reader_test,batch_size=batch_size)
+
+            #print(classifier.model.getShape())
+            predictions_train[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(tg,one_third//batch_size)
+            predictions_test[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(test_g,one_third//batch_size)
 
     return predictions_train, reader_train.labels, predictions_test, reader_test.filenames
 
@@ -78,7 +87,10 @@ def predict_with_ensemble(predictions_test, mode='mean'):
         print(predictions.shape)
     elif mode == "mean":
         predictions = np.mean(predictions_test, axis=0)
+        print('== Check mean ==')
         print(predictions.shape)
+        print(np.unique(predictions))
+        print("===")
     elif mode == 'max':
         predictions = np.max(predictions_test, axis=0)
         print(predictions.shape)
@@ -92,7 +104,7 @@ def ensemble(args):
     val_split = args.val_split
     mode = args.mode
     id = args.id
-    thres_opt = args.thres_opt
+    #thres_opt = args.thres_opt
     csv_files = args.csv_files
 
     if mlist:
@@ -122,8 +134,37 @@ def ensemble(args):
         predictions_test = predictions_tmp
 
     predictions = predict_with_ensemble(predictions_test, mode)
-
     result = pd.DataFrame(predictions, columns=data.labels)
+
+    ## Check for reasonable distribution
+    # Get targets from training data hdf5 file
+    reader = d.HDF_line_reader('input/train.h5', load_rgb=False)
+    _, targets, file_ids = d.get_all_train(reader=reader)
+    df = pd.DataFrame(np.array(targets), columns=data.labels)
+
+    # Create 2dim co occurence matrix by matrix multiplication
+    df_asint = df.astype(int)
+    # Count individual probabilities
+    # P(A)
+    summat = df_asint.values.sum(axis=0)
+    summatp = summat / np.sum(summat)
+
+    thresholds = np.arange(0.01,0.99,0.01)
+    diff = np.zeros((len(thresholds)))
+    for i,t in enumerate(thresholds):
+        r = result.values.copy()
+        r[r <= t] = 0
+        r[r > t] = 1
+        r = np.sum(r,axis=0)
+        r = r / np.sum(r)
+        difference = summatp-r
+        diff[i] = np.sum(np.abs(difference))
+
+    print(diff)
+    index_min = np.argmin(diff)
+    print("Index",index_min)
+    thres_opt = thresholds[index_min]
+    print('Threshold',thres_opt)
 
     preds = []
     for i in tqdm.tqdm(range(result.shape[0]), miniters=1000):
@@ -142,15 +183,17 @@ def ensemble(args):
 
 
 if __name__ == '__main__':
-    mlist = ['simple_net_0.68','simple_net_0.48']
+    mlist = []
+    img_sizes = []
+    #mlist = ['simple_net_0.68','simple_net_0.48']
     # List with same size as mlist
-    img_sizes = [64,64]
-    csv_files = []
-    #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
+    #img_sizes = [64,64]
+    #csv_files = []
+    csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
     val_split = 0.2
     mode = 'mean'
-    id = '2ndTry'
-    thres_opt = 0.4
+    id = 'more_subs_with_prob_check'
+    thres_opt = 0.6
     args = Namespace(val_split=val_split, modellist=mlist, img_sizes = img_sizes, mode=mode, id=id, thres_opt=thres_opt, csv_files=csv_files)
 
     ensemble(args)
