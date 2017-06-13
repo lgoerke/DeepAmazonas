@@ -5,7 +5,7 @@ import keras
 import pickle
 import numpy as np
 import pandas as pd
-import tqdm
+from tqdm import tqdm
 from keras.callbacks import ModelCheckpoint
 from keras.layers.core import Dense
 from keras.models import Sequential
@@ -20,16 +20,38 @@ def train_condp(args):
     model = args.model
     id = args.id
     thres_opt = args.thres_opt
+    img_size = args.img_size
 
-    reader = HDF_line_reader('input/train.h5', load_rgb=False)
-    all_data, all_labels, _ = d.get_all_train(reader)
+    p_train = np.zeros((40479, 17))
+    p_test = np.zeros((61191, 17))
+    one_third = 13493
 
-    reader = HDF_line_reader('input/test.h5', load_rgb=False)
-    all_test, test_files = d.get_all_test(reader)
+    batch_size = 103
 
+    splitter = Validation_splitter('input/train.h5', 1.0 / 3.0)
+    print(splitter.num_folds)
+    print(splitter.fold_size)
+
+    print('Loading model ', model)
     classifier = keras.models.load_model(os.path.join('models', model))
-    p_train = classifier.predict(all_data)
-    p_test = classifier.predict(all_test)
+
+    for j in range(3):
+        splitter.next_fold()
+
+        reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_size)
+        tg = d.train_generator(reader=reader_train, splitter=splitter, batch_size=batch_size)
+
+        reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_size)
+        test_g = d.test_generator(reader=reader_test, batch_size=batch_size)
+
+        # print(classifier.model.getShape())
+        p_train[one_third * j:one_third * j + one_third, :] = classifier.predict_generator(tg,
+                                                                                           one_third // batch_size)
+        p_test[one_third * j:one_third * j + one_third, :] = classifier.predict_generator(test_g,
+                                                                                          one_third // batch_size)
+
+    all_labels = reader_train.labels
+    test_files = reader_test.filenames
 
     condp2 = pickle.load(open('input/condp2.pkl', 'rb'))
     condp3 = pickle.load(open('input/condp3.pkl', 'rb'))
@@ -37,13 +59,13 @@ def train_condp(args):
     cp2flat = np.flatten(condp2)
     cp3flat = np.flatten(condp3)
 
-    predictions_train = np.zeros((len(all_data), 5219))
-    predictions_test = np.zeros((len(all_test), 5219))
+    predictions_train = np.zeros((40479, 5219))
+    predictions_test = np.zeros((61191, 5219))
 
-    for i, line in enumerate(p_train):
+    for i, line in tqdm(enumerate(p_train)):
         predictions_train[i] = np.concatenate([line, cp2flat, cp3flat])
 
-    for i, line in enumerate(p_test):
+    for i, line in tqdm(enumerate(p_test)):
         predictions_test[i] = np.concatenate([line, cp2flat, cp3flat])
 
     model = Sequential()
@@ -62,7 +84,6 @@ def train_condp(args):
 
     predictions = model.predict(predictions_test)
     print(predictions.shape)
-
 
     result = pd.DataFrame(predictions, columns=data.labels)
 
@@ -83,5 +104,5 @@ def train_condp(args):
 
 
 if __name__ == '__main__':
-    args = Namespace(model='simple_net_0.68',id='first',thres_opt = 0.4)
+    args = Namespace(model='simple_net_0.68', id='first', thres_opt=0.4, img_size=64)
     train_condp(args)

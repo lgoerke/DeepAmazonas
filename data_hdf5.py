@@ -97,6 +97,7 @@ class HDF_line_reader:
         -filenames: [lin(line_num)] array of file names.
         
         '''
+        #print('reading', line_num)
         imgs = map(lambda x: get_rgb(x,[2,1,0]), self.images[line_num]) if self.rgb else self.images[line_num]
         if self.img_size < 256:
             pool = ThreadPool(4)
@@ -276,6 +277,7 @@ def test_generator(reader, batch_size):
     start = 0
     l = len(reader.images)
     while True:
+        print('test batch')
         # idx = val_idx[start:(start+batch_size)%len(val_idx)]
         # start += batch_size
         if start + batch_size > l:

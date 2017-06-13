@@ -28,12 +28,13 @@ def create_predictions(modellist, val_split):
         print(splitter.num_folds)
         print(splitter.fold_size)
 
-
         print('Loading model ',m)
+        del classifier
         classifier = keras.models.load_model(os.path.join('models', m))
         
         print('Create predictions')
         for j in tqdm(range(3)):
+
             splitter.next_fold()
 
             reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
@@ -88,7 +89,10 @@ def predict_with_ensemble(predictions_test, mode='mean'):
         print(predictions.shape)
     elif mode == "mean":
         predictions = np.mean(predictions_test, axis=0)
+        print('== Check mean ==')
         print(predictions.shape)
+        print(np.unique(predictions))
+        print("===")
     elif mode == 'max':
         predictions = np.max(predictions_test, axis=0)
         print(predictions.shape)
@@ -102,7 +106,7 @@ def ensemble(args):
     val_split = args.val_split
     mode = args.mode
     id = args.id
-    thres_opt = args.thres_opt
+    #thres_opt = args.thres_opt
     csv_files = args.csv_files
 
     if mlist:
@@ -132,8 +136,37 @@ def ensemble(args):
         predictions_test = predictions_tmp
 
     predictions = predict_with_ensemble(predictions_test, mode)
-
     result = pd.DataFrame(predictions, columns=data.labels)
+
+    ## Check for reasonable distribution
+    # Get targets from training data hdf5 file
+    reader = d.HDF_line_reader('input/train.h5', load_rgb=False)
+    _, targets, file_ids = d.get_all_train(reader=reader)
+    df = pd.DataFrame(np.array(targets), columns=data.labels)
+
+    # Create 2dim co occurence matrix by matrix multiplication
+    df_asint = df.astype(int)
+    # Count individual probabilities
+    # P(A)
+    summat = df_asint.values.sum(axis=0)
+    summatp = summat / np.sum(summat)
+
+    thresholds = np.arange(0.01,0.99,0.01)
+    diff = np.zeros((len(thresholds)))
+    for i,t in enumerate(thresholds):
+        r = result.values.copy()
+        r[r <= t] = 0
+        r[r > t] = 1
+        r = np.sum(r,axis=0)
+        r = r / np.sum(r)
+        difference = summatp-r
+        diff[i] = np.sum(np.abs(difference))
+
+    print(diff)
+    index_min = np.argmin(diff)
+    print("Index",index_min)
+    thres_opt = thresholds[index_min]
+    print('Threshold',thres_opt)
 
     preds = []
     for i in tqdm.tqdm(range(result.shape[0]), miniters=1000):
@@ -157,10 +190,13 @@ if __name__ == '__main__':
     img_sizes = [64,224]
     csv_files = []
     #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
+    #mlist = []
+    #img_sizes = []
+    #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
     val_split = 0.2
     mode = 'mean'
-    id = '2ndTry'
-    thres_opt = 0.4
+    id = 'more_subs_with_prob_check'
+    thres_opt = 0.6
     args = Namespace(val_split=val_split, modellist=mlist, img_sizes = img_sizes, mode=mode, id=id, thres_opt=thres_opt, csv_files=csv_files)
 
     ensemble(args)

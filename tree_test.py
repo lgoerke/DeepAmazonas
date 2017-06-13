@@ -16,7 +16,7 @@ from data_hdf5_tree import Validation_splitter
 from data_hdf5_tree import HDF_line_reader
 from sklearn.metrics import fbeta_score
 
-from Classifiers.simpler_net import SimpleNet
+from Classifiers.simple_net import SimpleNet
 
 LABELS = {'blow_down': 0,
           'bare_ground': 1,
@@ -36,86 +36,13 @@ LABELS = {'blow_down': 0,
           'water': 15,
           'cloudy': 16}
 
-
-def test_Tree():
-    '''
-     |       Little test tree... 
-     |
-    / \
-    | |
-    '''
-
-    size = 64
-    batch_size = 96
-    nb_epoch = 1
-    optimizer = 'adadelta'
-    val_split = 0.2
-    N_CLASSES = 17
-    N_SAMPLES = 40479
-    N_TEST = 61191
-    test_batch_size = 9
-
-    #labels = list(data.LABELS.keys())
-
-
-    sp = Validation_splitter('/media/sebastian/7B4861FD6D0F6AA2/train.h5', val_split)
-    train_reader = HDF_line_reader('/media/sebastian/7B4861FD6D0F6AA2/train.h5', load_rgb = False, img_size=size)
-    test_reader = HDF_line_reader('/media/sebastian/7B4861FD6D0F6AA2/train.h5', load_rgb = False, img_size=size)
-    
-    new_cols = {'infrastructure': ['conventional_mine', 'artisinal_mine', 'slash_burn','bare_ground','habitation' ],
-                        'forest_phenomena': ['blow_down', 'blooming', 'cultivation', 'slash_burn', 'selective_logging'] }
-                        
-    add_class(new_cols.keys())
-    
-    node_3_1_phenomena_investigator = Node('node_3_1_phenomena_investigator', [],
-                    ['blow_down', 'blooming', 'slash_burn', 'selective_logging'],
-                    ['forest_phenomena'],add_labels = {'forest_phenomena': ['blow_down', 'blooming', 'cultivation','slash_burn', 'selective_logging']},
-                    clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
-
-    node_2_1_forestphenomena = Node('node_2_1_forestphenomena',
-                    [node_3_1_phenomena_investigator],
-                    ['forest_phenomena'],
-                    ['primary'],
-                    add_labels = {'forest_phenomena': ['blow_down', 'blooming', 'slash_burn', 'selective_logging']},clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
-
-    node_3_0_infra_investigator = Node('node_3_0_infra_investigator', [],
-                    ['conventional_mine', 'artisinal_mine', 'road','slash_burn','bare_ground','habitation' ],['infrastructure'],
-                    add_labels = {'infrastructure': ['conventional_mine', 'artisinal_mine', 'slash_burn','bare_ground','habitation' ]},clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
-
-    node_2_0_infrastructure = Node('node_2_0_infrastructure',
-                    [node_3_0_infra_investigator],
-                    ['infrastructure'],['haze', 'partly_cloudy', 'clear'],
-                    add_labels = {'infrastructure': ['conventional_mine', 'artisinal_mine', 'slash_burn','bare_ground','habitation' ]},
-                    clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
-
-    node_1_land = Node('node_1_land',
-                    [node_2_0_infrastructure, node_2_1_forestphenomena],
-                    ['agriculture', 'habitation', 'water', 'primary', 'cultivation', 'bare_ground'],
-                    ['haze', 'partly_cloudy', 'clear'],clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
-
-    node_0_weather = Node('node_0_weather', [node_1_land], ['cloudy', 'haze', 'partly_cloudy', 'clear'],clsfr = None,
-                        validation_splitter = sp, train_reader = train_reader, test_reader = test_reader)
-
-    return node_0_weather
-
-
-def add_class(names ):
-    for name in names:
-        LABELS[name] = len(LABELS.keys())
-
-
 class Node():
     '''One node in a decision tree, which creates one clsfr instance and can create a dataset for it.'''
 
     def __init__(self, name, children, use_labels, include_classes=None, clsfr=None,
-                    validation_splitter = None, train_reader = None, test_reader = None, add_labels = [],
-                    size = 64, batch_size = 96, nb_epoch = 1,optimizer = 'adadelta',val_split = 0.3, 
-                     N_SAMPLES = 40479, N_TEST = 61191,test_batch_size = 9 ):
+                    validation_splitter = None, train_reader = None, val_reader = None, test_reader = None, add_labels = [],
+                    size = 64, batch_size = 96, nb_epoch = 2,optimizer = 'adadelta',val_split = 0.2, 
+                     N_SAMPLES = 40479, N_TEST = 61191,test_batch_size = 96 ):
         '''
         @args:
         -name: Name for this node
@@ -134,6 +61,7 @@ class Node():
         self.add_labels = add_labels
         self.validation_splitter = validation_splitter
         self.train_reader = train_reader
+        self.val_reader = val_reader
         self.test_reader = test_reader
         self.size = size
         self.batch_size = batch_size
@@ -152,7 +80,7 @@ class Node():
     def __init_clsfr__(self, size=None):
         '''Create a new classifier object bound to this node'''
 
-        return SimpleNet((self.size,self.size,4), n_classes=len(self.use_labels), nb_epoch = self.nb_epoch, batch_size=self.batch_size, optimizer=self.optimizer)
+        return SimpleNet((self.size,self.size,3), n_classes=len(self.use_labels), nb_epoch = self.nb_epoch, batch_size=self.batch_size, optimizer=self.optimizer)
 
     def apply(self, y_history=None, test_batch_size = 20, validate = False):
         '''
@@ -230,7 +158,7 @@ class Node():
             
             tg = data.train_generator(self.train_reader, self.validation_splitter, self.batch_size,  
                                     use_labels =self.use_labels , new_columns= self.add_labels,included_columns = self.include_classes )
-            vg = data.val_generator(self.train_reader, self.validation_splitter, self.batch_size,  
+            vg = data.val_generator(self.val_reader, self.validation_splitter, self.batch_size,  
                                     use_labels=self.use_labels , new_columns= self.add_labels,included_columns = self.include_classes )
             
             print('training ',self.name, ' on ', self.use_labels)             
