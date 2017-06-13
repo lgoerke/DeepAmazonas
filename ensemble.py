@@ -13,7 +13,7 @@ import data_hdf5 as d
 import data as data
 from data_hdf5 import HDF_line_reader
 from data_hdf5 import Validation_splitter
-
+import tensorflow as tf
 
 def create_predictions(modellist, val_split):
 
@@ -22,15 +22,18 @@ def create_predictions(modellist, val_split):
     one_third = 13493
 
     batch_size=103
-
+    kerasmodellist = []
     for i, m in enumerate(modellist):
         splitter = Validation_splitter('input/train.h5', 1.0/3.0)
         print(splitter.num_folds)
         print(splitter.fold_size)
 
         print('Loading model ',m)
-        del classifier
-        classifier = keras.models.load_model(os.path.join('models', m))
+        if i > 0:
+            del classifier
+
+        with tf.variable_scope(m):
+            classifier = keras.models.load_model(os.path.join('models', m))
         
         print('Create predictions')
         for j in tqdm(range(3)):
@@ -135,6 +138,8 @@ def ensemble(args):
         predictions_tmp[predictions_test.shape[0]:, :, :] = predictions_csv
         predictions_test = predictions_tmp
 
+    for idx,p in enumerate(predictions_test):
+      pd.DataFrame(p,columns=data.labels).to_csv('ensemble/predictions_{}_{}.csv'.format(id,idx), index=False)
     predictions = predict_with_ensemble(predictions_test, mode)
     result = pd.DataFrame(predictions, columns=data.labels)
 
@@ -169,13 +174,16 @@ def ensemble(args):
     print('Threshold',thres_opt)
 
     preds = []
-    for i in tqdm.tqdm(range(result.shape[0]), miniters=1000):
+    #for i in tqdm(range(result.shape[0]), miniters=1000):
+    print('Create csv')
+    for i in range(result.shape[0]):
         a = result.ix[[i]]
         a = a.apply(lambda x: x > thres_opt, axis=1)
         a = a.transpose()
         a = a.loc[a[i] == True]
         ' '.join(list(a.index))
         preds.append(' '.join(list(a.index)))
+    print('Done')
 
     df = pd.DataFrame(np.zeros((61191,2)), columns=['image_name','tags'])
     df['image_name'] = test_files
@@ -185,9 +193,9 @@ def ensemble(args):
 
 
 if __name__ == '__main__':
-    mlist = ['simple_net_0.68','dense_net_0.68']
+    mlist = ['simple_net_0.48','simple_net_0.68']
     # List with same size as mlist
-    img_sizes = [64,224]
+    img_sizes = [64,64]
     csv_files = []
     #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
     #mlist = []
@@ -195,7 +203,7 @@ if __name__ == '__main__':
     #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
     val_split = 0.2
     mode = 'mean'
-    id = 'more_subs_with_prob_check'
+    id = '2simplenet'
     thres_opt = 0.6
     args = Namespace(val_split=val_split, modellist=mlist, img_sizes = img_sizes, mode=mode, id=id, thres_opt=thres_opt, csv_files=csv_files)
 

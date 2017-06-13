@@ -277,7 +277,7 @@ def test_generator(reader, batch_size):
     start = 0
     l = len(reader.images)
     while True:
-        print('test batch')
+        #print('test batch')
         # idx = val_idx[start:(start+batch_size)%len(val_idx)]
         # start += batch_size
         if start + batch_size > l:
