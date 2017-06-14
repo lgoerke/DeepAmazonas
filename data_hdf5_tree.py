@@ -120,10 +120,11 @@ def train_generator(reader, splitter, batch_size, use_labels = [], included_colu
         advance = 0
         for X_batch, Y_batch in datagen.flow(d, l, batch_size=batch_size):
 
-                
+            print('training batch...', X_batch.shape)   
             yield (X_batch, Y_batch)
             cnt += Y_batch.shape[0]
             advance += batch_size
+            
             if advance >= num :
                 
                 break
@@ -226,8 +227,10 @@ def val_generator(reader, splitter, batch_size, use_labels = [],included_columns
         advance = 0
         num_batches = len(d) / batch_size
         if num_batches == 0:
+            print('no batches...')
             break
         for batch in range(int(num_batches)):
+            print('validation batch...', X_batch.shape, cnt, num, batch_size) 
             yield (np.array(d[cnt:cnt + batch_size]), np.array(l[cnt:cnt + batch_size]))
             cnt += batch_size
             if cnt >= num:

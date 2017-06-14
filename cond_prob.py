@@ -84,9 +84,11 @@ def cond_prob(args):
                 else:
                     condp3[i, j, k] = cooccp3[i, j, k] / cooccp2[j, k]
 
+
+    print('haldlaslf')
     # Put in pickle
-    pickle.dump(condp2, open('input/condp2.pkl', 'wb'))
-    pickle.dump(condp3, open('input/condp3.pkl', 'wb'))
+    #pickle.dump(condp2, open('input/condp2.pkl', 'wb'))
+    #pickle.dump(condp3, open('input/condp3.pkl', 'wb'))
 
 
 if __name__ == '__main__':
