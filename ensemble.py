@@ -15,15 +15,15 @@ from data_hdf5 import HDF_line_reader
 from data_hdf5 import Validation_splitter
 import tensorflow as tf
 
-def create_predictions(modellist, val_split):
+def create_predictions(modellist, img_sizes):
 
     predictions_train = np.zeros((len(modellist), 40479, 17))
     predictions_test = np.zeros((len(modellist), 61191, 17))
-    one_third = 13493
 
-    batch_size=103
-    kerasmodellist = []
     for i, m in enumerate(modellist):
+        one_third = 13493
+        batch_size = 103
+
         splitter = Validation_splitter('input/train.h5', 1.0/3.0)
         print(splitter.num_folds)
         print(splitter.fold_size)
@@ -35,7 +35,7 @@ def create_predictions(modellist, val_split):
         with tf.variable_scope(m):
             classifier = keras.models.load_model(os.path.join('models', m))
         
-        print('Create predictions')
+        print('Create predictions train')
         for j in tqdm(range(3)):
 
             splitter.next_fold()
@@ -43,12 +43,23 @@ def create_predictions(modellist, val_split):
             reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
             tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
 
-            reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
-            test_g =d.test_generator(reader=reader_test,batch_size=batch_size)
-
             #print(classifier.model.getShape())
             predictions_train[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(tg,one_third//batch_size)
-            predictions_test[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(test_g,one_third//batch_size)
+
+        one_third = 20397
+        batch_size = 523
+
+        splitter = Validation_splitter('input/test.h5', 1.0 / 3.0)
+        print(splitter.num_folds)
+        print(splitter.fold_size)
+
+        for j in tqdm(range(3)):
+
+            reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
+            test_g = d.test_generator(reader=reader_test, batch_size=batch_size)
+
+            predictions_test[i, one_third * j:one_third * j + one_third, :] = classifier.predict_generator(test_g,
+                                                                                                           one_third // batch_size)
 
     return predictions_train, reader_train.labels, predictions_test, reader_test.filenames
 
@@ -106,14 +117,13 @@ def predict_with_ensemble(predictions_test, mode='mean'):
 def ensemble(args):
     mlist = args.modellist
     img_sizes = args.img_sizes
-    val_split = args.val_split
     mode = args.mode
     id = args.id
     #thres_opt = args.thres_opt
     csv_files = args.csv_files
 
     if mlist:
-        predictions_train, all_labels, predictions_test, test_files = create_predictions(mlist, val_split)
+        predictions_train, all_labels, predictions_test, test_files = create_predictions(mlist, img_sizes)
     else:
         reader = HDF_line_reader('input/test.h5', load_rgb=False)
         _, test_files = d.get_all_test(reader)
@@ -140,6 +150,7 @@ def ensemble(args):
 
     for idx,p in enumerate(predictions_test):
       pd.DataFrame(p,columns=data.labels).to_csv('ensemble/predictions_{}_{}.csv'.format(id,idx), index=False)
+
     predictions = predict_with_ensemble(predictions_test, mode)
     result = pd.DataFrame(predictions, columns=data.labels)
 
@@ -174,9 +185,8 @@ def ensemble(args):
     print('Threshold',thres_opt)
 
     preds = []
-    #for i in tqdm(range(result.shape[0]), miniters=1000):
     print('Create csv')
-    for i in range(result.shape[0]):
+    for i in tqdm(range(result.shape[0]), miniters=1000):
         a = result.ix[[i]]
         a = a.apply(lambda x: x > thres_opt, axis=1)
         a = a.transpose()
@@ -201,10 +211,9 @@ if __name__ == '__main__':
     #mlist = []
     #img_sizes = []
     #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
-    val_split = 0.2
     mode = 'mean'
     id = '2simplenet'
     thres_opt = 0.6
-    args = Namespace(val_split=val_split, modellist=mlist, img_sizes = img_sizes, mode=mode, id=id, thres_opt=thres_opt, csv_files=csv_files)
+    args = Namespace(modellist=mlist, img_sizes = img_sizes, mode=mode, id=id, thres_opt=thres_opt, csv_files=csv_files)
 
     ensemble(args)
