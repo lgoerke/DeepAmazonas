@@ -114,13 +114,13 @@ def train_generator(reader, splitter, batch_size, use_labels = [], included_colu
             for key,_ in new_columns.items():
                 del LABELS[key]
                 
-        print(d.shape, l.shape, mask_idx.sum())
+        #print(d.shape, l.shape, mask_idx.sum())
         
         cnt = 0
         advance = 0
         for X_batch, Y_batch in datagen.flow(d, l, batch_size=batch_size):
 
-            print('training batch...', X_batch.shape)   
+            #print('training batch...', X_batch.shape)   
             yield (X_batch, Y_batch)
             cnt += Y_batch.shape[0]
             advance += batch_size
@@ -128,19 +128,8 @@ def train_generator(reader, splitter, batch_size, use_labels = [], included_colu
             if advance >= num :
                 
                 break
-            #if included_columns:
-                
-                #X_batch = X_batch[mask_idx[advance:(advance+batch_size)]]
-                #Y_batch = Y_batch[mask_idx[advance:(advance+batch_size)]]
-                                
-                '''#print(np.max(X_batch))
-                for i in range(X_batch.shape[0]):
-                    np.save('/media/sebastian/MYLINUXLIVE/4/imgs1/'+str(i+cnt),X_batch[i,:,:,:])
-                    
-                    #plt.subplot(10,10,i+1)
-                    #plt.imshow(X_batch[i,:,:,:]*256,aspect = 'auto')
-                #plt.show()
-                adsf'''
+
+
 
 def val_generator(reader, splitter, batch_size, use_labels = [],included_columns=[], new_columns={}):
     '''
@@ -230,7 +219,7 @@ def val_generator(reader, splitter, batch_size, use_labels = [],included_columns
             print('no batches...')
             break
         for batch in range(int(num_batches)):
-            print('validation batch...', X_batch.shape, cnt, num, batch_size) 
+            #print('validation batch...', cnt, num, batch_size) 
             yield (np.array(d[cnt:cnt + batch_size]), np.array(l[cnt:cnt + batch_size]))
             cnt += batch_size
             if cnt >= num:

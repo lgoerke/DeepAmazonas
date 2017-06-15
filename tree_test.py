@@ -16,7 +16,7 @@ from data_hdf5_tree import Validation_splitter
 from data_hdf5_tree import HDF_line_reader
 from sklearn.metrics import fbeta_score
 
-from Classifiers.simple_net import SimpleNet
+from Classifiers.simpler_net import SimpleNet
 
 LABELS = {'blow_down': 0,
           'bare_ground': 1,
@@ -41,8 +41,8 @@ class Node():
 
     def __init__(self, name, children, use_labels, include_classes=None, clsfr=None,
                     validation_splitter = None, train_reader = None, val_reader = None, test_reader = None, add_labels = [],
-                    size = 64, batch_size = 96, nb_epoch = 2,optimizer = 'adadelta',val_split = 0.2, 
-                     N_SAMPLES = 40479, N_TEST = 61191,test_batch_size = 96 ):
+                    size = 224, batch_size = 96, val_batch_size = 1, nb_epoch = 1,optimizer = 'adadelta',val_split = 0.2, 
+                     N_SAMPLES = 40479, N_TEST = 61191,test_batch_size = 40,labels = LABELS ):
         '''
         @args:
         -name: Name for this node
@@ -55,7 +55,7 @@ class Node():
         self.X_mask = None
         self.y_history = None
         self.use_labels = use_labels
-        self.lbls = None
+        self.labels = labels
         self.children = children
         self.include_classes = include_classes
         self.add_labels = add_labels
@@ -71,7 +71,7 @@ class Node():
         self.N_SAMPLES = N_SAMPLES
         self.N_TEST = N_TEST
         self.test_batch_size = test_batch_size
-        
+        self.val_batch_size = val_batch_size
         if clsfr is None:
             self.clsfr = self.__init_clsfr__()
         else:
@@ -98,31 +98,35 @@ class Node():
 
         if validate:
             reader = self.train_reader
+            N_cycles = self.N_SAMPLES
+            loc_batch_size = self.val_batch_size
         else:
             reader = self.test_reader
+            N_cycles = self.N_TEST
+            loc_batch_size = self.test_batch_size
         
         if self.validation_splitter is not None:
             if y_history is None:
                 print('Created new y-matrix')
-                y_history = np.zeros((self.N_TEST,len(LABELS.keys())))
+                y_history = np.zeros((N_cycles,len(self.labels.keys())))
     
-            X_mask = np.ones((self.N_TEST))
+            X_mask = np.ones((N_cycles))
             if self.include_classes:
                 X_mask[:] = 0
                 for cls in (self.include_classes):
-                    X_mask = np.logical_or(y_history[:,LABELS[cls]]>0.3,X_mask) 
+                    X_mask = np.logical_or(y_history[:,self.labels[cls]]>0.3,X_mask) 
     
     
-            test_gen = data.test_generator(reader, test_batch_size)
-            p_test = self.clsfr.predict(test_gen, self.N_TEST // test_batch_size)
+            test_gen = data.test_generator(reader, loc_batch_size)
+            p_test = self.clsfr.predict(test_gen, N_cycles // loc_batch_size)
     
             
             if self.use_labels:
-                lbls = np.zeros((len(LABELS.keys())))    
+                lbls = np.zeros((len(self.labels.keys())))    
                 for lbl in (self.use_labels):
-                    lbls[LABELS[lbl]] = True
+                    lbls[self.labels[lbl]] = True
             else:
-                lbls = np.ones((len(LABELS.keys()))) 
+                lbls = np.ones((len(self.labels.keys()))) 
         
             p_test = np.multiply(p_test,np.repeat(np.expand_dims(X_mask,axis = 1),len(self.use_labels),axis=1))
     
@@ -140,12 +144,12 @@ class Node():
 
         if y_history is None:
             print('Created new y-matrix')
-            y_history = np.zeros((self.N_TEST,len(LABELS.keys())))
+            y_history = np.zeros((self.N_TEST,len(self.labels.keys())))
 
-        y_history = self.apply(y_history, validation)
+        y_history = self.apply(y_history, validate = validation)
 
         for child in self.children:
-            y_history = child.apply_rec(y_history, validation)
+            y_history = child.apply_rec(y_history, validation = validation)
 
         return y_history
 
@@ -158,7 +162,7 @@ class Node():
             
             tg = data.train_generator(self.train_reader, self.validation_splitter, self.batch_size,  
                                     use_labels =self.use_labels , new_columns= self.add_labels,included_columns = self.include_classes )
-            vg = data.val_generator(self.val_reader, self.validation_splitter, self.batch_size,  
+            vg = data.val_generator(self.val_reader, self.validation_splitter, self.val_batch_size,  
                                     use_labels=self.use_labels , new_columns= self.add_labels,included_columns = self.include_classes )
             
             print('training ',self.name, ' on ', self.use_labels)             
