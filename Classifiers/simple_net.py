@@ -154,11 +154,11 @@ class SimpleNet(Classifier_base):
     '''
     def fit(self, train_generator, validation_generator, steps):
         
-        early = EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=0, mode='auto')
+        early = EarlyStopping(monitor='val_acc', min_delta=0.1, patience=5, verbose=1, mode='auto')
 
         self.model.fit_generator(train_generator, steps_per_epoch=steps[0]//self.batch_size, 
             validation_data=validation_generator, validation_steps=steps[1]//self.batch_size,
-            callbacks=[early], epochs = self.nb_epoch, max_q_size=30, verbose = 1)
+            callbacks=[early], epochs = self.nb_epoch, max_q_size=30, verbose = 1, pickle_safe=True)
 
 
 
@@ -170,7 +170,7 @@ class SimpleNet(Classifier_base):
     '''
     def predict(self, test_generator, steps):
         #return self.model.predict(test_imgs, batch_size = self.batch_size, verbose = 1)
-        return self.model.predict_generator(test_generator, steps=steps, verbose=1)
+        return self.model.predict_generator(test_generator, steps=steps, verbose=1, workers=1, pickle_safe=True)
 
 
     '''

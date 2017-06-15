@@ -16,9 +16,12 @@ hdf = h5py.File('input/train.h5', 'w')
 dt = h5py.special_dtype(vlen=bytes)
 
 img, label, name = next(gen)
-np.random.shuffle(img)
-np.random.shuffle(label)
-np.random.shuffle(name)
+
+randomize = np.arange(len(img))
+np.random.shuffle(randomize)
+img = img[randomize]
+label = label[randomize]
+name = name[randomize]
 
 maxshape = (None,) + img.shape[1:]
 images = hdf.create_dataset('imgs', shape=img.shape, maxshape=maxshape,
@@ -39,9 +42,11 @@ ids[:] = name
 row_count = len(img)
 for img, label, name in tqdm(gen, desc='Create hdf5'):
     # Resize the dataset to accommodate the next chunk of rows
-    np.random.shuffle(img)
-    np.random.shuffle(label)
-    np.random.shuffle(name)
+    randomize = np.arange(len(img))
+    np.random.shuffle(randomize)
+    img = img[randomize]
+    label = label[randomize]
+    name = name[randomize]
     
     images.resize(row_count + img.shape[0], axis=0)
     labels.resize(row_count + label.shape[0], axis=0)
