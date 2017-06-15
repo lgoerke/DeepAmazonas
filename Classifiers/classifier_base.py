@@ -38,7 +38,7 @@ class Classifier_base:
 	@param test_imgs: test data
 	@return predictions for test_imgs
 	'''
-	def predict(test_imgs):
+	def predict(self, test_imgs):
 		pass
 
 

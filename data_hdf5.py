@@ -120,6 +120,9 @@ def get_all_train(reader):
     l = reader.labels
     file_ids = reader.filenames
 
+    #indices = list(np.arange(len(l)))
+    #d = reader.read_line_hdf(indices)
+	
     return d, l, file_ids
 
 
@@ -274,6 +277,7 @@ def test_generator(reader, batch_size):
     start = 0
     l = len(reader.images)
     while True:
+        #print('test batch')
         # idx = val_idx[start:(start+batch_size)%len(val_idx)]
         # start += batch_size
         if start + batch_size > l:
