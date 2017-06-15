@@ -6,6 +6,7 @@ from keras.layers import AveragePooling2D
 from keras.layers.core import Dense, Dropout, Flatten
 from keras.callbacks import EarlyStopping
 from keras import optimizers
+from keras.models import Sequential, Model
 
 class VGG16(Classifier_base):
 
@@ -22,7 +23,7 @@ class VGG16(Classifier_base):
     Constructor
     @params: list of all model parameters
     '''
-    def __init__(self, shape=(256, 256, 3), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam', nl_freeze=15):
+    def __init__(self, shape=(224, 224, 3), n_classes=2, nb_epoch = 12, lr=0.001, batch_size=64, optimizer='adam', nl_unfreeze=15):
         
         self.shape = shape
         self.n_classes = n_classes
@@ -30,34 +31,42 @@ class VGG16(Classifier_base):
         self.lr = lr
         self.optimizer = optimizer
         self.batch_size = batch_size
-        self.nl_unfreeze = nl_freeze
+        self.nl_unfreeze = nl_unfreeze
 
         self.build()
 
     def build(self):
-	"""
+        """
         Loads preconstructed VGG model from keras without top classification layer;
         Stacks custom classification layer on top;
         Returns stacked model
         """
 
         # build the VGG16 network
-        base_model = applications.VGG16(weights='imagenet', include_top=False, input_shape=shape)
+        base_model = applications.VGG16(weights='imagenet', include_top=False, input_shape=self.shape)
         print('Base-model loaded.')
 
-	for layer in base_model.layers:
+        for layer in base_model.layers:
             layer.trainable = False
 
-	top_model = base_model.output
-        top_model = AveragePooling2D((8, 8), strides=(8, 8), name='avg_pool')(top_model)
-        top_model = Flatten(name='flatten')(top_model)
-        top_model = Dense(4096, activation='relu')(top_model)
-        top_model = Dropout(0.5)(top_model)
-        top_model = Dense(self.n_classes, activation='sigmoid', name='predictions')(top_model)
-        
-        model = self.model = Model(base_model.input, top_model)
+        # build a classifier model to put on top of the convolutional model
+        top_model = Sequential()
+        top_model.add(Flatten(input_shape=base_model.output_shape[1:]))
+        top_model.add(Dense(256, activation='relu'))
+        top_model.add(Dropout(0.5))
+        top_model.add(Dense(self.n_classes, activation='sigmoid', name='predictions'))
 
-	if self.optimizer == 'adam':
+        #top_model = base_model.output
+        #top_model = AveragePooling2D((8, 8), strides=(8, 8), name='avg_pool')(top_model)
+        #top_model = Flatten(name='flatten')(top_model)
+        #top_model = Dense(4096, activation='relu')(top_model)
+        #top_model = Dropout(0.5)(top_model)
+        #top_model = Dense(self.n_classes, activation='sigmoid', name='predictions')(top_model)
+        
+        model = self.model = Model(inputs=base_model.input, outputs=top_model(base_model.output))
+        #model = self.model = Model(base_model.input, top_model)
+
+        if self.optimizer == 'adam':
             opt = optimizers.adam(lr=self.lr)
         elif self.optimizer == 'adadelta':
             opt = optimizers.adadelta(lr = self.lr)
@@ -70,10 +79,10 @@ class VGG16(Classifier_base):
         
         return model
    
-    def unfreeze_layers(self)
-	for layer in self.model.layers[:self.nl_freeze]:
+    def unfreeze_layers(self):
+        for layer in self.model.layers[:self.nl_unfreeze]:
                 layer.trainable = False
-        for layer in self.model.layers[self.nl_freeze:]:
+        for layer in self.model.layers[self.nl_unfreeze:]:
                 layer.trainable = True
 
         self.model.compile(optimizer=optimizers.SGD(lr=0.0001, momentum=0.9), loss='binary_crossentropy', metrics=['accuracy'])
@@ -92,5 +101,17 @@ class VGG16(Classifier_base):
     @param test_imgs: test data
     @return predictions for test_imgs
     '''
-    def predict(self, Xtest):
-        return self.model.predict(X_test, batch_size = self.batch_size, verbose = 1)
+    def predict(self, test_generator, steps):
+        #return self.model.predict(X_test, batch_size = self.batch_size, verbose = 1)
+        return self.model.predict_generator(test_generator, steps=steps, verbose=1)
+
+    '''
+    Evaluate classifier performance of validation data
+    @param validation_generator: Generator for validation data
+    @param steps: Number of batches per epoch
+    @return classification loss
+    '''
+    def evaluate(self, validation_generator, steps):
+        steps = steps // self.batch_size or 1
+        score = self.model.evaluate_generator(validation_generator, steps=steps, workers=1)    
+        return score[0]

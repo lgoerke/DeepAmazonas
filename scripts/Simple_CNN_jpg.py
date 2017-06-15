@@ -20,7 +20,6 @@ import cv2
 from skimage import io
 import matplotlib.pyplot as plt
 from PIL import Image
-import gdal
 from tqdm import tqdm
 
 from sklearn.cross_validation import train_test_split
@@ -29,6 +28,7 @@ from sklearn.metrics import fbeta_score
 import time
 
 
+from Classifiers.simple_net import SimpleNet
 # Pre-processing the train and test data
 
 x_train = []
@@ -36,11 +36,11 @@ x_test = []
 y_train = []
 
 #n_train_images = 40479
-df_train = pd.read_csv('../data/train_v2.csv')
+df_train = pd.read_csv('input/train_v2.csv')
 #df_train = pd.read_csv('../data/train_v2.csv', nrows=n_train_images)
 #df_train = pd.read_csv('../data/train_100.csv')
 #n_test_images = 2000
-df_test = pd.read_csv('../data/sample_submission_v2.csv')
+df_test = pd.read_csv('input/sample_submission_v2.csv')
 
 flatten = lambda l: [item for sublist in l for item in sublist]
 labels = list(set(flatten([l.split(' ') for l in df_train['tags'].values])))
@@ -85,7 +85,7 @@ resize_to = (64,64)
 
 #for f, tags in tqdm(df_train.values[:18000], miniters=1000):
 for f, tags in tqdm(df_train.values, miniters=1000):
-    img = io.imread('../data/train-tif-v2/{}.tif'.format(f))
+    img = io.imread('input/train-jpg/{}.jpg'.format(f))
     #img = io.imread('../data/train-tif_100/{}.tif'.format(f))
     targets = np.zeros(17)
     for t in tags.split(' '):
@@ -93,19 +93,6 @@ for f, tags in tqdm(df_train.values, miniters=1000):
     x_train.append(cv2.resize(img, resize_to))
     y_train.append(targets)
 
-check_dependencies=False
-if check_dependencies:
-    cloudy_partiallycloudy_clear_haze=[]
-    cloudy_primary=[]
-    for i in range(len(y_train)):
-        cloudy_partiallycloudy_clear_haze.append(y_train[i][16]+y_train[i][13]+y_train[i][10]+y_train[i][6])
-        cloudy_primary.append(y_train[i][1]+y_train[i][7]+y_train[i][16])
-    cloudy_partiallycloudy_clear_haze=np.array(cloudy_partiallycloudy_clear_haze)
-    cloudy_primary=np.array(cloudy_primary)
-    np.min(cloudy_partiallycloudy_clear_haze)
-    np.max(cloudy_partiallycloudy_clear_haze)
-    np.min(cloudy_primary)
-    np.max(cloudy_primary)
 
 #xjpg_train=[]
 #yjpg_train=[]
@@ -119,40 +106,10 @@ if check_dependencies:
 #    yjpg_train.append(targets)
 
 for f, tags in tqdm(df_test.values, miniters=1000):
-    img = io.imread('../data/test-tif-v2/{}.tif'.format(f))
+    img = io.imread('input/test-jpg/{}.jpg'.format(f))
     #img = io.imread('../data/test-tif_100/{}.tif'.format(f))
     #img = cv2.imread('../data/test-jpg/{}.jpg'.format(f))
     x_test.append(cv2.resize(img, resize_to))
-
-show_images=False
-if show_images:
-    plt.figure(figsize=(12,8))
-    plt.subplot(141)
-    plt.imshow(x_train[1][ :, :, 0])
-    plt.colorbar()
-    plt.subplot(142)
-    plt.imshow(x_train[1][ :, :, 1])
-    plt.colorbar()
-    plt.subplot(143)
-    plt.imshow(x_train[1][ :, :, 2])
-    plt.colorbar()
-    plt.subplot(144)
-    plt.imshow(x_train[1][ :, :, 3])
-    plt.colorbar()
-    plt.figure(figsize=(12,8))
-    plt.subplot(141)
-    plt.imshow(x_train[4][ :, :, 0])
-    plt.colorbar()
-    plt.subplot(142)
-    plt.imshow(x_train[4][ :, :, 1])
-    plt.colorbar()
-    plt.subplot(143)
-    plt.imshow(x_train[4][ :, :, 2])
-    plt.colorbar()
-    plt.subplot(144)
-    plt.imshow(x_train[4][ :, :, 3])
-    plt.colorbar()
-    plt.show()
 
 #yjpg_train = np.array(yjpg_train[:1000], np.uint8)
 #xjpg_train = np.array(xjpg_train[:1000], np.float32) / 255.
@@ -160,11 +117,14 @@ if show_images:
 x_max = np.max(x_train)
 
 y_train = np.array(y_train, np.uint8)
+#x_train = list(map(lambda x: x/x_max, x_train))
+#x_test = list(map(lambda x: x/x_max, x_test))
 x_train = np.array(x_train, np.float32) / x_max
 x_test  = np.array(x_test, np.float32) / x_max
 
-print(x_train.shape)
-print(y_train.shape)
+
+#print(x_train.shape)
+#print(y_train.shape)
 
 # Transpose the data if use Theano
 
@@ -204,7 +164,7 @@ def optimise_f2_thresholds(y, p, verbose=True, resolution=100):
 
 from keras.layers.normalization import BatchNormalization
 
-nfolds = 3
+nfolds = 5
 
 num_fold = 0
 sum_score = 0
@@ -230,12 +190,12 @@ for train_index, valid_index in kf:
         #Y_valid = y_train[test_index]
 
         num_fold += 1
-        print('Start KFold number {} from {}'.format(num_fold, nfolds))
-        print('Split train: ', len(X_train), len(Y_train))
-        print('Split valid: ', len(X_valid), len(Y_valid))
+        #print('Start KFold number {} from {}'.format(num_fold, nfolds))
+        #print('Split train: ', len(X_train), len(Y_train))
+        #print('Split valid: ', len(X_valid), len(Y_valid))
         
         kfold_weights_path = os.path.join('', 'weights_kfold_' + str(num_fold) + '.h5')
-        
+        ''' 
         model = Sequential()
         model.add(BatchNormalization(input_shape=(resize_to[0], resize_to[1], 4))) # 64
         model.add(Conv2D(8, 1, 1, activation='relu')) # 64
@@ -255,12 +215,19 @@ for train_index, valid_index in kf:
         model.compile(loss='binary_crossentropy', 
                       optimizer='adam',
                       metrics=['accuracy'])
+        '''
+        
+        classifier = SimpleNet((64,64,3), n_classes=17, nb_epoch = 5, batch_size=128, optimizer='adam')
+        #classifier = DenseNet(224, 224, batch_size=16, nb_epoch=10, color_type=3, num_classes=17)
+        model = classifier.model
+
         callbacks = [
-            EarlyStopping(monitor='val_loss', patience=2, verbose=0),
+            #EarlyStopping(monitor='val_loss', patience=2, verbose=0),
             ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0)]
         
+
         model.fit(x = X_train, y= Y_train, validation_data=(X_valid, Y_valid),
-                  batch_size=128,verbose=2, nb_epoch=10,callbacks=callbacks,
+                  batch_size=128,verbose=2, nb_epoch=5,callbacks=callbacks,
                   shuffle=True)
         
         if os.path.isfile(kfold_weights_path):
@@ -278,11 +245,12 @@ for train_index, valid_index in kf:
         p_test = model.predict(x_test, batch_size = 128, verbose=2)
         yfull_test.append(p_test)
 
+        break
 
 # Averaging the prediction from each fold
 
 result = np.array(yfull_test[0])
-for i in range(1, nfolds):
+for i in range(1, len(yfull_test)):
     result += np.array(yfull_test[i])
 result /= nfolds
 result = pd.DataFrame(result, columns = labels)
@@ -311,7 +279,7 @@ df_test.to_csv('submission_keras.csv', index=False)
 # Averaging the prediction from each fold
 
 result = np.array(yfull_train[0])
-for i in range(1, nfolds):
+for i in range(1, len(yfull_train)):
     result += np.array(yfull_train[i])
 result /= nfolds
 result = pd.DataFrame(result, columns = labels)

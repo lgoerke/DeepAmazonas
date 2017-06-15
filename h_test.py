@@ -5,14 +5,12 @@ import numpy as np
 from tqdm import tqdm
 
 #test_tiff, test_filenames = d.get_all_test('input/test-tif-v2')
-gen = d.get_test_generator('input/test-tif-v2', chunk_size=5000)
+gen = d.get_test_generator_jpg('input/test-jpg', chunk_size=5000)
 hdf = h5py.File('input/test.h5', 'w')
 
 dt = h5py.special_dtype(vlen=bytes)
 
 img, name = next(gen)
-np.random.shuffle(img)
-np.random.shuffle(name)
 
 maxshape = (None,) + img.shape[1:]
 images = hdf.create_dataset('imgs', shape=img.shape, maxshape=maxshape,
@@ -28,9 +26,6 @@ ids[:] = name
 
 row_count = len(img)
 for img, name in tqdm(gen, desc='Create hdf5', total=61191):
-    np.random.shuffle(img)
-    np.random.shuffle(name)
-    
     # Resize the dataset to accommodate the next chunk of rows
     images.resize(row_count + img.shape[0], axis=0)
     ids.resize(row_count + name.shape[0], axis=0)

@@ -1,6 +1,7 @@
 .DS_Store
 input/
 models/*
+ensemble/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

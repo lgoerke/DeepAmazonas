@@ -4,7 +4,6 @@ import sys
 import os
 import pandas as pd
 from tqdm import tqdm
-import pdb
 
 import utils
 import data_hdf5 as data
@@ -16,11 +15,11 @@ from Classifiers.simple_net import SimpleNet
 from Classifiers.densenet import DenseNet
 
 def main(args):
-    #size = 96
-    size = 224
-    #batch_size = 128
-    batch_size = 16
-    nb_epoch = 10
+    size = 96
+    #size = 224
+    batch_size = 128
+    #batch_size = 16
+    nb_epoch = 25
     optimizer = 'adam'
     val_split = 0.2
     N_CLASSES = 17
@@ -32,11 +31,8 @@ def main(args):
     channel = 3
 
 
-    labels = list(data.LABELS.keys())
+    labels = data.labels
     cross_val = True
-
-    classifier = DenseNet(img_rows, img_cols, batch_size=batch_size, nb_epoch=nb_epoch, color_type=channel, num_classes=N_CLASSES)
-    #classifier = SimpleNet((size,size,3), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
 
     splitter = Validation_splitter('input/train.h5', val_split)
     reader = HDF_line_reader('input/train.h5', load_rgb = False, img_size=size)
@@ -44,6 +40,9 @@ def main(args):
 
     result = np.zeros((N_TEST,N_CLASSES))
     while(splitter.next_fold() and cross_val):
+
+        #classifier = DenseNet(img_rows, img_cols, batch_size=batch_size, nb_epoch=nb_epoch, color_type=channel, num_classes=N_CLASSES)
+        classifier = SimpleNet((size,size,3), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
 
         tg = data.train_generator(reader, splitter, batch_size)
         vg = data.val_generator(reader, splitter, batch_size)
@@ -57,7 +56,6 @@ def main(args):
         idx = list(splitter.val_idx)
         idx.sort()
         val_labels = reader.labels[idx]
-
         loss = fbeta_score(val_labels, np.array(p_valid) > 0.2, beta=2, average='samples')
         print('validation loss: {}'.format(loss))
 
@@ -72,7 +70,7 @@ def main(args):
         
         cross_val = False 
 
-    result /= splitter.num_folds
+    #result /= splitter.num_folds
     result = pd.DataFrame(result, columns = labels)    
     
     preds = []
@@ -88,7 +86,7 @@ def main(args):
     df['image_name'] = test_reader.filenames
     df['tags'] = preds
 
-    id = 1
+    id = 2
     df.to_csv('submission{}.csv'.format(id), index=False)
 
 

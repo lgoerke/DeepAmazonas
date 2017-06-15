@@ -10,7 +10,7 @@ import pdb
 import data as dat
 
 LABELS = dat.LABELS
-REV_LABELS = dat.REV_LABELS
+labels = dat.labels
 
 
 class Validation_splitter:
@@ -49,10 +49,9 @@ class Validation_splitter:
                 select = np.arange(self.num_fold * self.fold_size, len(self.row_nums))
             self.val_idx = self.row_nums[select]
 
-            train_select = np.full(len(self.row_nums), True)
+            train_select = np.ones(len(self.row_nums)).astype(bool)
             train_select[select] = False
             self.train_idx = self.row_nums[train_select]
-
             self.num_fold += 1
             return True
         else:
@@ -97,8 +96,8 @@ class HDF_line_reader:
         -filenames: [lin(line_num)] array of file names.
         
         '''
-        #print('reading', line_num)
-        imgs = map(lambda x: get_rgb(x,[2,1,0]), self.images[line_num]) if self.rgb else self.images[line_num]
+        imgs = map(lambda x: get_rgb(x,[2,1,0]), self.images[line_num].astype(np.float(32))) if self.rgb else self.images[line_num].astype(np.float32)
+        imgs /= 255
         if self.img_size < 256:
             pool = ThreadPool(4)
             imgs = pool.map(lambda x: cv2.resize(x, (self.img_size, self.img_size)), imgs)
@@ -171,12 +170,13 @@ def train_generator(reader, splitter, batch_size):
     train_idx = splitter.train_idx
 
     datagen = ImageDataGenerator(
-        # rotation_range=15,
+        rotation_range=15,
         width_shift_range=0.2,
         height_shift_range=0.2,
         shear_range=0.2,
         zoom_range=0.2,
         horizontal_flip=True,
+        vertical_flip=True,
         fill_mode='nearest')
 
     start = 0
@@ -277,7 +277,7 @@ def test_generator(reader, batch_size):
     start = 0
     l = len(reader.images)
     while True:
-        print('test batch')
+        #print('test batch')
         # idx = val_idx[start:(start+batch_size)%len(val_idx)]
         # start += batch_size
         if start + batch_size > l:
@@ -291,5 +291,6 @@ def test_generator(reader, batch_size):
 
         imgs, _ = reader.read_line_hdf(select)
         start += batch_size
+        if start > l: start = start - l
 
         yield (np.array(imgs))
