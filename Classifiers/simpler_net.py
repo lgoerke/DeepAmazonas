@@ -155,24 +155,13 @@ class SimpleNet():
     @param validation_generator: Generator for validation data
     @param steps: Number of batches per epoch
     '''
-    def fit(self, X, Y, steps=1):
+    def fit(self, train_generator, validation_generator, steps):
         
-        #early = EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=0, mode='auto')
-        
-        '''train_generator=ImageDataGenerator(
-                rotation_range=15,
-                width_shift_range=0.2,
-                height_shift_range=0.2,
-                shear_range=0.2,
-                zoom_range=0.2,
-                horizontal_flip=True,
-                fill_mode='nearest')'''
-        
-        '''train_generator.fit(X)'''
-        
-        self.model.fit(X,Y, batch_size = self.batch_size,epochs = 2) #_generator(train_generator.flow(X,Y),steps_per_epoch=1)#, steps_per_epoch=steps[0]//self.batch_size, 
-            #validation_data=validation_generator, validation_steps=steps[1]//self.batch_size,
-            #callbacks=[early], epochs = self.nb_epoch, verbose = 1)
+        early = EarlyStopping(monitor='val_loss', min_delta=0, patience=5, verbose=0, mode='auto')
+
+        self.model.fit_generator(train_generator, steps_per_epoch=steps[0]//self.batch_size, 
+            validation_data=validation_generator, validation_steps=steps[1]//self.batch_size,
+            callbacks=[early], epochs = self.nb_epoch, max_q_size=30, verbose = 1)
 
 
 
@@ -182,8 +171,9 @@ class SimpleNet():
     @param test_imgs: test data
     @return predictions for test_imgs
     '''
-    def predict(self, test_imgs):
-        return self.model.predict(test_imgs, batch_size = self.batch_size, verbose = 1)
+    def predict(self, test_generator, steps):
+        #return self.model.predict(test_imgs, batch_size = self.batch_size, verbose = 1)
+        return self.model.predict_generator(test_generator, steps=steps, verbose=1)
 
 
     '''
