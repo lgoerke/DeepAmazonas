@@ -21,47 +21,57 @@ def create_predictions(modellist, img_sizes):
     predictions_test = np.zeros((len(modellist), 61191, 17))
 
     for i, m in enumerate(modellist):
-        one_third = 13493
-        batch_size = 103
-
-        splitter = Validation_splitter('input/train.h5', 1.0/3.0)
-        print(splitter.num_folds)
-        print(splitter.fold_size)
-
-        print('Loading model ',m)
-        if i > 0:
-            del classifier
-
-        with tf.variable_scope(m):
-            classifier = keras.models.load_model(os.path.join('models', m))
+        if has_pred[i] == False:
         
-        print('Create predictions train')
-        for j in tqdm(range(3)):
+            one_third = 13493
+            batch_size = 103
 
-            splitter.next_fold()
+            splitter = Validation_splitter('input/train.h5', 1.0/3.0)
+            print(splitter.num_folds)
+            print(splitter.fold_size)
 
-            reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
-            tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
+            print('Loading model ',m)
+            if i > 0:
+                del classifier
 
-            #print(classifier.model.getShape())
-            predictions_train[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(tg,one_third//batch_size)
+            with tf.variable_scope(m):
+                classifier = keras.models.load_model(os.path.join('models', m))
+        
+            print('Create predictions train')
+            for j in tqdm(range(3)):
 
-        one_third = 20397
-        batch_size = 523
+                splitter.next_fold()
 
-        splitter = Validation_splitter('input/test.h5', 1.0 / 3.0)
-        print(splitter.num_folds)
-        print(splitter.fold_size)
+                reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
+                tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
 
-        for j in tqdm(range(3)):
+                #print(classifier.model.getShape())
+                predictions_train[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(tg,one_third//batch_size)
 
-            reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
-            test_g = d.test_generator(reader=reader_test, batch_size=batch_size)
+            one_third = 20397
+            batch_size = 523
 
-            predictions_test[i, one_third * j:one_third * j + one_third, :] = classifier.predict_generator(test_g,
+            splitter = Validation_splitter('input/test.h5', 1.0 / 3.0)
+            print(splitter.num_folds)
+            print(splitter.fold_size)
+
+            for j in tqdm(range(3)):
+
+                reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
+                test_g = d.test_generator(reader=reader_test, batch_size=batch_size)
+
+                predictions_test[i, one_third * j:one_third * j + one_third, :] = classifier.predict_generator(test_g,
                                                                                                            one_third // batch_size)
+        else:
+            df = pd.read_csv(model_csv_train[i])
+            predictions_train[i,:,:]  = df[data.labels]
+            df.drop(df.index, inplace=True)
+            df = pd.read_csv(model_csv_test[i])
+            predictions_test[i,:,:] = df[data.labels]
+            df.drop(df.index, inplace=True)
 
-    return predictions_train, reader_train.labels, predictions_test, reader_test.filenames
+
+    return predictions_train, reader_train.labels, predictions_test, reader_train.filenames, reader_test.filenames
 
 
 def train_ensemble(predictions_train, all_labels, id):
@@ -123,7 +133,7 @@ def ensemble(args):
     csv_files = args.csv_files
 
     if mlist:
-        predictions_train, all_labels, predictions_test, test_files = create_predictions(mlist, img_sizes)
+        predictions_train, all_labels, predictions_test, train_files, test_files = create_predictions(mlist, img_sizes)
     else:
         reader = HDF_line_reader('input/test.h5', load_rgb=False)
         _, test_files = d.get_all_test(reader)
@@ -149,7 +159,11 @@ def ensemble(args):
         predictions_test = predictions_tmp
 
     for idx,p in enumerate(predictions_test):
-      pd.DataFrame(p,columns=data.labels).to_csv('ensemble/predictions_{}_{}.csv'.format(id,idx), index=False)
+        if has_pred[i] == False:
+            pdf = pd.DataFrame(p,columns=[*data.labels,'image_name'])
+            pdf['image_name'] = test_files
+            pdf.to_csv('ensemble/predictions_{}_{}.csv'.format(id,idx), index=False)
+            pdf.drop(pdf.index, inplace=True)
 
     predictions = predict_with_ensemble(predictions_test, mode)
     result = pd.DataFrame(predictions, columns=data.labels)
@@ -203,6 +217,9 @@ def ensemble(args):
 
 
 if __name__ == '__main__':
+    model_csv_train = []
+    model_csv_test = []
+    has_pred = ['False','False']
     mlist = ['simple_net_0.48','simple_net_0.68']
     # List with same size as mlist
     img_sizes = [64,64]
