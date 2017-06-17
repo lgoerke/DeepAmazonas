@@ -15,68 +15,11 @@ from data_hdf5 import HDF_line_reader
 from data_hdf5 import Validation_splitter
 import tensorflow as tf
 
-def create_predictions(modellist, img_sizes):
-
-    predictions_train = np.zeros((len(modellist), 40479, 17))
-    predictions_test = np.zeros((len(modellist), 61191, 17))
-
-    for i, m in enumerate(modellist):
-        if has_pred[i] == False:
-        
-            one_third = 13493
-            batch_size = 103
-
-            splitter = Validation_splitter('input/train.h5', 1.0/3.0)
-            print(splitter.num_folds)
-            print(splitter.fold_size)
-
-            print('Loading model ',m)
-            if i > 0:
-                del classifier
-
-            with tf.variable_scope(m):
-                classifier = keras.models.load_model(os.path.join('models', m))
-        
-            print('Create predictions train')
-            for j in tqdm(range(3)):
-
-                splitter.next_fold()
-
-                reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=img_sizes[i])
-                tg = d.train_generator(reader=reader_train,splitter=splitter,batch_size=batch_size)
-
-                #print(classifier.model.getShape())
-                predictions_train[i, one_third*j:one_third*j+one_third, :] = classifier.predict_generator(tg,one_third//batch_size)
-
-            one_third = 20397
-            batch_size = 523
-
-            splitter = Validation_splitter('input/test.h5', 1.0 / 3.0)
-            print(splitter.num_folds)
-            print(splitter.fold_size)
-
-            for j in tqdm(range(3)):
-
-                reader_test = HDF_line_reader('input/test.h5', load_rgb=False, img_size=img_sizes[i])
-                test_g = d.test_generator(reader=reader_test, batch_size=batch_size)
-
-                predictions_test[i, one_third * j:one_third * j + one_third, :] = classifier.predict_generator(test_g,
-                                                                                                           one_third // batch_size)
-        else:
-            df = pd.read_csv(model_csv_train[i])
-            predictions_train[i,:,:]  = df[data.labels]
-            df.drop(df.index, inplace=True)
-            df = pd.read_csv(model_csv_test[i])
-            predictions_test[i,:,:] = df[data.labels]
-            df.drop(df.index, inplace=True)
-
-
-    return predictions_train, reader_train.labels, predictions_test, reader_train.filenames, reader_test.filenames
-
 
 def train_ensemble(predictions_train, all_labels, id):
-    predictions_train = np.transpose(predictions_train,(1,0,2))
-    predictions_train = np.reshape(predictions_train,(predictions_train.shape[0], predictions_train[1]*predictions_train[2]))
+    predictions_train = np.transpose(predictions_train, (1, 0, 2))
+    predictions_train = np.reshape(predictions_train,
+                                   (predictions_train.shape[0], predictions_train[1] * predictions_train[2]))
 
     model = Sequential()
     model.add(Dense(1024, input_dim=(predictions_train.shape[1])))
@@ -97,7 +40,7 @@ def predict_with_ensemble(predictions_test, mode='mean'):
     if mode == 'network':
         predictions_test = np.transpose(predictions_test, (1, 0, 2))
         predictions_test = np.reshape(predictions_test,
-                                       (predictions_test.shape[0], predictions_test[1] * predictions_test[2]))
+                                      (predictions_test.shape[0], predictions_test[1] * predictions_test[2]))
 
         model = Sequential()
         model.add(Dense(1024, input_dim=(predictions_test.shape[1])))
@@ -125,23 +68,47 @@ def predict_with_ensemble(predictions_test, mode='mean'):
 
 
 def ensemble(args):
-    mlist = args.modellist
-    img_sizes = args.img_sizes
+    model_csv_train = args.model_csv_train
+    model_csv_test = args.model_csv_test
     mode = args.mode
     id = args.id
-    #thres_opt = args.thres_opt
+    # thres_opt = args.thres_opt
     csv_files = args.csv_files
 
-    if mlist:
-        predictions_train, all_labels, predictions_test, train_files, test_files = create_predictions(mlist, img_sizes)
+    reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=42)
+    all_labels = reader_train.labels
+    train_filenames = reader_train.filenames
+
+    pdf = pd.DataFrame(train_filenames, columns=['image_name'])
+    ldf = pd.DataFrame(np.array(all_labels), columns=data.labels)
+    labeldf = pd.concat([pdf, ldf], axis=1)
+
+    if model_csv_train:
+
+        predictions_train = np.zeros((len(model_csv_test), 40479, 17))
+        predictions_test = np.zeros((len(model_csv_train), 61191, 17))
+
+        tmpdf = pd.read_csv(model_csv_test[0])
+        test_files = tmpdf['image_name']
+
+        for idx, mo in enumerate(model_csv_test):
+            df = pd.read_csv(model_csv_train[idx])
+            df = df.sort_values('image_name')
+            del df['image_name']
+            predictions_train[idx, :, :] = df
+            df.drop(df.index, inplace=True)
+            df = pd.read_csv(model_csv_test[idx])
+            del df['image_name']
+            predictions_test[idx, :, :] = df
+            df.drop(df.index, inplace=True)
     else:
         reader = HDF_line_reader('input/test.h5', load_rgb=False)
         _, test_files = d.get_all_test(reader)
         predictions_test = np.zeros((0, 61191, 17))
 
     if mode == "network":
-        assert isinstance(mlist, object, "Network mode needs models")
-        train_ensemble(predictions_train, all_labels, id)
+        assert isinstance(model_csv_train, object, "Network mode needs models")
+        train_ensemble(predictions_train, labeldf, id)
 
     if csv_files:
         if mode == "network":
@@ -152,18 +119,12 @@ def ensemble(args):
             predictions_csv = np.zeros((len(csv_files), predictions_test.shape[1], predictions_test.shape[2]))
             for i, c in enumerate(csv_files):
                 df = pd.read_csv(c)
+                df.sort_values('image_name')
                 for j, row in enumerate(df['tags']):
                     predictions_csv[i, j, :] = data.to_one_hot(row)
         predictions_tmp[:predictions_test.shape[0], :, :] = predictions_test
         predictions_tmp[predictions_test.shape[0]:, :, :] = predictions_csv
         predictions_test = predictions_tmp
-
-    for idx,p in enumerate(predictions_test):
-        if has_pred[i] == False:
-            pdf = pd.DataFrame(p,columns=[*data.labels,'image_name'])
-            pdf['image_name'] = test_files
-            pdf.to_csv('ensemble/predictions_{}_{}.csv'.format(id,idx), index=False)
-            pdf.drop(pdf.index, inplace=True)
 
     predictions = predict_with_ensemble(predictions_test, mode)
     result = pd.DataFrame(predictions, columns=data.labels)
@@ -181,22 +142,22 @@ def ensemble(args):
     summat = df_asint.values.sum(axis=0)
     summatp = summat / np.sum(summat)
 
-    thresholds = np.arange(0.01,0.99,0.01)
+    thresholds = np.arange(0.01, 0.99, 0.01)
     diff = np.zeros((len(thresholds)))
-    for i,t in enumerate(thresholds):
+    for i, t in enumerate(thresholds):
         r = result.values.copy()
         r[r <= t] = 0
         r[r > t] = 1
-        r = np.sum(r,axis=0)
+        r = np.sum(r, axis=0)
         r = r / np.sum(r)
-        difference = summatp-r
+        difference = summatp - r
         diff[i] = np.sum(np.abs(difference))
 
     print(diff)
     index_min = np.argmin(diff)
-    print("Index",index_min)
+    print("Index", index_min)
     thres_opt = thresholds[index_min]
-    print('Threshold',thres_opt)
+    print('Threshold', thres_opt)
 
     preds = []
     print('Create csv')
@@ -209,7 +170,7 @@ def ensemble(args):
         preds.append(' '.join(list(a.index)))
     print('Done')
 
-    df = pd.DataFrame(np.zeros((61191,2)), columns=['image_name','tags'])
+    df = pd.DataFrame(np.zeros((61191, 2)), columns=['image_name', 'tags'])
     df['image_name'] = test_files
     df['tags'] = preds
 
@@ -217,20 +178,18 @@ def ensemble(args):
 
 
 if __name__ == '__main__':
-    model_csv_train = []
-    model_csv_test = []
-    has_pred = ['False','False']
-    mlist = ['simple_net_0.48','simple_net_0.68']
+    model_csv_train = ['ensemble/train_preds_dense.csv', 'ensemble/xgb_pred_probs_train.csv']
+    model_csv_test = ['ensemble/test_preds_dense.csv', 'ensemble/xgb_pred_probs_test.csv']
     # List with same size as mlist
-    img_sizes = [64,64]
     csv_files = []
-    #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
-    #mlist = []
-    #img_sizes = []
-    #csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
-    mode = 'mean'
-    id = '2simplenet'
+    # csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
+    # mlist = []
+    # img_sizes = []
+    # csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
+    mode = 'max'
+    id = 'xgb_dense_max'
     thres_opt = 0.6
-    args = Namespace(modellist=mlist, img_sizes = img_sizes, mode=mode, id=id, thres_opt=thres_opt, csv_files=csv_files)
+    args = Namespace(model_csv_train=model_csv_train, model_csv_test=model_csv_test, mode=mode, id=id,
+                     thres_opt=thres_opt, csv_files=csv_files)
 
     ensemble(args)
