@@ -19,16 +19,16 @@ import tensorflow as tf
 def train_ensemble(predictions_train, all_labels, id):
     predictions_train = np.transpose(predictions_train, (1, 0, 2))
     predictions_train = np.reshape(predictions_train,
-                                   (predictions_train.shape[0], predictions_train[1] * predictions_train[2]))
+                                   (predictions_train.shape[0], predictions_train.shape[1] * predictions_train.shape[2]))
 
     model = Sequential()
     model.add(Dense(1024, input_dim=(predictions_train.shape[1])))
     model.add(Dense(17, activation='softmax'))
-    model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     print(model.summary())
 
     # define the checkpoint
-    filepath = 'ensemble/ensemble_{}.hdf5'.format(id)
+    filepath = 'ensemble/weights_{epoch:02d}_{loss:.2f}.hdf5'
     checkpoint = ModelCheckpoint(filepath, monitor='loss', save_best_only=True, verbose=1)
     callbacks_list = [checkpoint]
 
@@ -36,7 +36,7 @@ def train_ensemble(predictions_train, all_labels, id):
     model.fit(predictions_train, all_labels, nb_epoch=100, batch_size=32, callbacks=callbacks_list)
 
 
-def predict_with_ensemble(predictions_test, mode='mean'):
+def predict_with_ensemble(predictions_test,id,epoch,loss, mode='mean'):
     if mode == 'network':
         predictions_test = np.transpose(predictions_test, (1, 0, 2))
         predictions_test = np.reshape(predictions_test,
@@ -47,7 +47,7 @@ def predict_with_ensemble(predictions_test, mode='mean'):
         model.add(Dense(17, activation='softmax'))
 
         # define the checkpoint
-        filepath = 'ensemble/ensemble_{}.hdf5'.format(id)
+        filepath = 'ensemble/weights_{}_{}_{}.hdf5'.format(id,epoch,loss)
         model.load_weights(filepath)
         model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
         print(model.summary())
@@ -74,107 +74,220 @@ def ensemble(args):
     id = args.id
     # thres_opt = args.thres_opt
     csv_files = args.csv_files
+    chosen_weights_e = args.chosen_weights_e
+    chosen_weights_l = args.chosen_weights_l
+    first_run = args.first_run
 
-    reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=42)
-    all_labels = reader_train.labels
-    train_filenames = reader_train.filenames
+    if mode == 'network':    
 
-    pdf = pd.DataFrame(train_filenames, columns=['image_name'])
-    ldf = pd.DataFrame(np.array(all_labels), columns=data.labels)
-    labeldf = pd.concat([pdf, ldf], axis=1)
+        reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=42)
+        all_labels = reader_train.labels
+        train_filenames = reader_train.filenames
 
-    if model_csv_train:
+        pdf = pd.DataFrame(train_filenames, columns=['image_name'])
+        ldf = pd.DataFrame(np.array(all_labels), columns=data.labels)
+        labeldf = pd.concat([pdf, ldf], axis=1)
 
-        predictions_train = np.zeros((len(model_csv_test), 40479, 17))
-        predictions_test = np.zeros((len(model_csv_train), 61191, 17))
+        if model_csv_train:
 
-        tmpdf = pd.read_csv(model_csv_test[0])
-        test_files = tmpdf['image_name']
+            predictions_train = np.zeros((len(model_csv_test), 40479, 17))
+            predictions_test = np.zeros((len(model_csv_train), 61191, 17))
 
-        for idx, mo in enumerate(model_csv_test):
-            df = pd.read_csv(model_csv_train[idx])
-            df = df.sort_values('image_name')
-            del df['image_name']
-            predictions_train[idx, :, :] = df
-            df.drop(df.index, inplace=True)
-            df = pd.read_csv(model_csv_test[idx])
-            del df['image_name']
-            predictions_test[idx, :, :] = df
-            df.drop(df.index, inplace=True)
-    else:
-        reader = HDF_line_reader('input/test.h5', load_rgb=False)
-        _, test_files = d.get_all_test(reader)
-        predictions_test = np.zeros((0, 61191, 17))
+            tmpdf = pd.read_csv(model_csv_test[0])
+            test_files = tmpdf['image_name']
 
-    if mode == "network":
-        assert isinstance(model_csv_train, object, "Network mode needs models")
-        train_ensemble(predictions_train, labeldf, id)
-
-    if csv_files:
-        if mode == "network":
-            print('CSV files are ignored because of network mode')
+            for idx, mo in enumerate(model_csv_test):
+                df = pd.read_csv(model_csv_train[idx])
+                df = df.sort_values('image_name')
+                del df['image_name']
+                predictions_train[idx, :, :] = df
+                df.drop(df.index, inplace=True)
+                df = pd.read_csv(model_csv_test[idx])
+                del df['image_name']
+                predictions_test[idx, :, :] = df
+                df.drop(df.index, inplace=True)
         else:
-            predictions_tmp = np.zeros(
-                (predictions_test.shape[0] + len(csv_files), predictions_test.shape[1], predictions_test.shape[2]))
-            predictions_csv = np.zeros((len(csv_files), predictions_test.shape[1], predictions_test.shape[2]))
-            for i, c in enumerate(csv_files):
-                df = pd.read_csv(c)
-                df.sort_values('image_name')
-                for j, row in enumerate(df['tags']):
-                    predictions_csv[i, j, :] = data.to_one_hot(row)
-        predictions_tmp[:predictions_test.shape[0], :, :] = predictions_test
-        predictions_tmp[predictions_test.shape[0]:, :, :] = predictions_csv
-        predictions_test = predictions_tmp
+            reader = HDF_line_reader('input/test.h5', load_rgb=False)
+            _, test_files = d.get_all_test(reader)
+            predictions_test = np.zeros((0, 61191, 17))
 
-    predictions = predict_with_ensemble(predictions_test, mode)
-    result = pd.DataFrame(predictions, columns=data.labels)
+        if first_run:
 
-    ## Check for reasonable distribution
-    # Get targets from training data hdf5 file
-    reader = d.HDF_line_reader('input/train.h5', load_rgb=False)
-    _, targets, file_ids = d.get_all_train(reader=reader)
-    df = pd.DataFrame(np.array(targets), columns=data.labels)
+            if mode == "network":
+                #assert isinstance(model_csv_train, object, "Network mode needs models")
+                train_ensemble(predictions_train, labeldf, id)
 
-    # Create 2dim co occurence matrix by matrix multiplication
-    df_asint = df.astype(int)
-    # Count individual probabilities
-    # P(A)
-    summat = df_asint.values.sum(axis=0)
-    summatp = summat / np.sum(summat)
 
-    thresholds = np.arange(0.01, 0.99, 0.01)
-    diff = np.zeros((len(thresholds)))
-    for i, t in enumerate(thresholds):
-        r = result.values.copy()
-        r[r <= t] = 0
-        r[r > t] = 1
-        r = np.sum(r, axis=0)
-        r = r / np.sum(r)
-        difference = summatp - r
-        diff[i] = np.sum(np.abs(difference))
+        if csv_files:
+            if mode == "network":
+                print('CSV files are ignored because of network mode')
+            else:
+                predictions_tmp = np.zeros(
+                    (predictions_test.shape[0] + len(csv_files), predictions_test.shape[1], predictions_test.shape[2]))
+                predictions_csv = np.zeros((len(csv_files), predictions_test.shape[1], predictions_test.shape[2]))
+                for i, c in enumerate(csv_files):
+                    df = pd.read_csv(c)
+                    df.sort_values('image_name')
+                    for j, row in enumerate(df['tags']):
+                        predictions_csv[i, j, :] = data.to_one_hot(row)
+            predictions_tmp[:predictions_test.shape[0], :, :] = predictions_test
+            predictions_tmp[predictions_test.shape[0]:, :, :] = predictions_csv
+            predictions_test = predictions_tmp
 
-    print(diff)
-    index_min = np.argmin(diff)
-    print("Index", index_min)
-    thres_opt = thresholds[index_min]
-    print('Threshold', thres_opt)
+        if not first_run:
 
-    preds = []
-    print('Create csv')
-    for i in tqdm(range(result.shape[0]), miniters=1000):
-        a = result.ix[[i]]
-        a = a.apply(lambda x: x > thres_opt, axis=1)
-        a = a.transpose()
-        a = a.loc[a[i] == True]
-        ' '.join(list(a.index))
-        preds.append(' '.join(list(a.index)))
-    print('Done')
+            predictions = predict_with_ensemble(predictions_test,id, mode)
+            result = pd.DataFrame(predictions, columns=data.labels)
 
-    df = pd.DataFrame(np.zeros((61191, 2)), columns=['image_name', 'tags'])
-    df['image_name'] = test_files
-    df['tags'] = preds
+            ## Check for reasonable distribution
+            # Get targets from training data hdf5 file
+            reader = d.HDF_line_reader('input/train.h5', load_rgb=False)
+            _, targets, file_ids = d.get_all_train(reader=reader)
+            df = pd.DataFrame(np.array(targets), columns=data.labels)
 
-    df.to_csv('ensemble/submission_ensemble_{}.csv'.format(id), index=False)
+            # Create 2dim co occurence matrix by matrix multiplication
+            df_asint = df.astype(int)
+            # Count individual probabilities
+            # P(A)
+            summat = df_asint.values.sum(axis=0)
+            summatp = summat / np.sum(summat)
+
+            thresholds = np.arange(0.01, 0.99, 0.01)
+            diff = np.zeros((len(thresholds)))
+            for i, t in enumerate(thresholds):
+                r = result.values.copy()
+                r[r <= t] = 0
+                r[r > t] = 1
+                r = np.sum(r, axis=0)
+                r = r / np.sum(r)
+                difference = summatp - r
+                diff[i] = np.sum(np.abs(difference))
+
+            print(diff)
+            index_min = np.argmin(diff)
+            print("Index", index_min)
+            thres_opt = thresholds[index_min]
+            print('Threshold', thres_opt)
+
+            preds = []
+            print('Create csv')
+            for i in tqdm(range(result.shape[0]), miniters=1000):
+                a = result.ix[[i]]
+                a = a.apply(lambda x: x > thres_opt, axis=1)
+                a = a.transpose()
+                a = a.loc[a[i] == True]
+                ' '.join(list(a.index))
+                preds.append(' '.join(list(a.index)))
+            print('Done')
+
+            df = pd.DataFrame(np.zeros((61191, 2)), columns=['image_name', 'tags'])
+            df['image_name'] = test_files
+            df['tags'] = preds
+
+            df.to_csv('ensemble/submission_ensemble_{}.csv'.format(id), index=False)
+
+    else:
+
+        reader_train = HDF_line_reader('input/train.h5', load_rgb=False, img_size=42)
+        all_labels = reader_train.labels
+        train_filenames = reader_train.filenames
+
+        pdf = pd.DataFrame(train_filenames, columns=['image_name'])
+        ldf = pd.DataFrame(np.array(all_labels), columns=data.labels)
+        labeldf = pd.concat([pdf, ldf], axis=1)
+
+        if model_csv_train:
+
+            predictions_train = np.zeros((len(model_csv_test), 40479, 17))
+            predictions_test = np.zeros((len(model_csv_train), 61191, 17))
+
+            tmpdf = pd.read_csv(model_csv_test[0])
+            test_files = tmpdf['image_name']
+
+            for idx, mo in enumerate(model_csv_test):
+                df = pd.read_csv(model_csv_train[idx])
+                df = df.sort_values('image_name')
+                del df['image_name']
+                predictions_train[idx, :, :] = df
+                df.drop(df.index, inplace=True)
+                df = pd.read_csv(model_csv_test[idx])
+                del df['image_name']
+                predictions_test[idx, :, :] = df
+                df.drop(df.index, inplace=True)
+        else:
+            reader = HDF_line_reader('input/test.h5', load_rgb=False)
+            _, test_files = d.get_all_test(reader)
+            predictions_test = np.zeros((0, 61191, 17))
+
+        if mode == "network":
+            #assert isinstance(model_csv_train, object, "Network mode needs models")
+            train_ensemble(predictions_train, labeldf, id)
+
+        if csv_files:
+            if mode == "network":
+                print('CSV files are ignored because of network mode')
+            else:
+                predictions_tmp = np.zeros(
+                    (predictions_test.shape[0] + len(csv_files), predictions_test.shape[1], predictions_test.shape[2]))
+                predictions_csv = np.zeros((len(csv_files), predictions_test.shape[1], predictions_test.shape[2]))
+                for i, c in enumerate(csv_files):
+                    df = pd.read_csv(c)
+                    df.sort_values('image_name')
+                    for j, row in enumerate(df['tags']):
+                        predictions_csv[i, j, :] = data.to_one_hot(row)
+            predictions_tmp[:predictions_test.shape[0], :, :] = predictions_test
+            predictions_tmp[predictions_test.shape[0]:, :, :] = predictions_csv
+            predictions_test = predictions_tmp
+
+        predictions = predict_with_ensemble(predictions_test,id, mode)
+        result = pd.DataFrame(predictions, columns=data.labels)
+
+        ## Check for reasonable distribution
+        # Get targets from training data hdf5 file
+        reader = d.HDF_line_reader('input/train.h5', load_rgb=False)
+        _, targets, file_ids = d.get_all_train(reader=reader)
+        df = pd.DataFrame(np.array(targets), columns=data.labels)
+
+        # Create 2dim co occurence matrix by matrix multiplication
+        df_asint = df.astype(int)
+        # Count individual probabilities
+        # P(A)
+        summat = df_asint.values.sum(axis=0)
+        summatp = summat / np.sum(summat)
+
+        thresholds = np.arange(0.01, 0.99, 0.01)
+        diff = np.zeros((len(thresholds)))
+        for i, t in enumerate(thresholds):
+            r = result.values.copy()
+            r[r <= t] = 0
+            r[r > t] = 1
+            r = np.sum(r, axis=0)
+            r = r / np.sum(r)
+            difference = summatp - r
+            diff[i] = np.sum(np.abs(difference))
+
+        print(diff)
+        index_min = np.argmin(diff)
+        print("Index", index_min)
+        thres_opt = thresholds[index_min]
+        print('Threshold', thres_opt)
+
+        preds = []
+        print('Create csv')
+        for i in tqdm(range(result.shape[0]), miniters=1000):
+            a = result.ix[[i]]
+            a = a.apply(lambda x: x > thres_opt, axis=1)
+            a = a.transpose()
+            a = a.loc[a[i] == True]
+            ' '.join(list(a.index))
+            preds.append(' '.join(list(a.index)))
+        print('Done')
+
+        df = pd.DataFrame(np.zeros((61191, 2)), columns=['image_name', 'tags'])
+        df['image_name'] = test_files
+        df['tags'] = preds
+
+        df.to_csv('ensemble/submission_ensemble_{}.csv'.format(id), index=False)
 
 
 if __name__ == '__main__':
@@ -186,10 +299,13 @@ if __name__ == '__main__':
     # mlist = []
     # img_sizes = []
     # csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
-    mode = 'max'
-    id = 'xgb_dense_max'
+    mode = 'network'
+    id = 'xgb_dense_nn'
+    chosen_weights_e = ''
+    chosen_weights_l =''
+    first_run = True
     thres_opt = 0.6
     args = Namespace(model_csv_train=model_csv_train, model_csv_test=model_csv_test, mode=mode, id=id,
-                     thres_opt=thres_opt, csv_files=csv_files)
+                     thres_opt=thres_opt, csv_files=csv_files,chosen_weights_e=chosen_weights_e,chosen_weights_l=chosen_weights_l,first_run=first_run)
 
     ensemble(args)
