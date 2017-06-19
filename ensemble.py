@@ -51,6 +51,27 @@ def train_logistic(predictions_train, all_labels, id):
     filename = 'logistic_regr.sav'
     pickle.dump(logistic, open(filename, 'wb'))
 
+def train_ensemble_full(predictions_train, all_labels, id):
+    predictions_train = np.transpose(predictions_train, (1, 0, 2))
+    predictions_train = np.reshape(predictions_train,
+                                   (predictions_train.shape[0], predictions_train.shape[1] * predictions_train.shape[2]))
+
+    model = Sequential()
+    model.add(Dense(128, input_dim=(predictions_train.shape[1]), activation='relu'))
+    model.add(Dense(128, activation='relu'))
+    model.add(Dense(17, activation='sigmoid'))
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    print(model.summary())
+
+    print('Predictions train',predictions_train.shape)
+    print('Labels train', all_labels.shape)
+
+    # define the checkpoint
+    filepath = 'ensemble/weights_{epoch:02d}_{loss:.2f}.hdf5'
+    checkpoint = ModelCheckpoint(filepath, monitor='loss', save_best_only=True, verbose=1)
+    callbacks_list = [checkpoint]
+    model.fit(predictions_train,  np.array(all_labels), epochs=50, batch_size=32, callbacks=callbacks_list)
+
 def train_ensemble(predictions_train, all_labels, id):
     predictions_train = np.transpose(predictions_train, (1, 0, 2))
     predictions_train = np.reshape(predictions_train,
@@ -71,9 +92,17 @@ def train_ensemble(predictions_train, all_labels, id):
     checkpoint = ModelCheckpoint(filepath, monitor='loss', save_best_only=True, verbose=1)
     callbacks_list = [checkpoint]
 
+    cutoff = int(len(predictions_train)*0.8)
     # Fit the model
-    model.fit(predictions_train,  np.array(all_labels), epochs=50, batch_size=32, callbacks=callbacks_list)
+    model.fit(predictions_train[:cutoff,:],  np.array(all_labels)[:cutoff,:], epochs=50, batch_size=32, callbacks=callbacks_list)
 
+    p_valid = model.predict(predictions_train[cutoff:,:])
+
+    loss = fbeta_score(np.array(all_labels)[cutoff:,:], np.array(p_valid) > 0.2, beta=2, average='samples')
+    print('validation loss: {}'.format(loss))
+    probas = model.predict(predictions_train[cutoff:,:])
+    thres_opt = utils.optimise_f2_thresholds(np.array(all_labels)[cutoff:,:], probas)
+    print(thres_opt)
 
 def predict_with_ensemble(predictions_test,id,epoch,loss, mode='mean'):
     if mode == 'network':
@@ -376,13 +405,13 @@ if __name__ == '__main__':
     # mlist = []
     # img_sizes = []
     # csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
-    mode = 'regr'
-    id = 'xgb_dense_regr'
-    chosen_weights_e = '49'
-    chosen_weights_l ='0.07'
-    first_run = True
+    mode = 'network'
+    id = 'xgb_dense_nn3_before'
+    chosen_weights_e = '46'
+    chosen_weights_l ='0.08'
+    first_run = False
     use_condp = True
-    thres_list = [0.03, 0.08, 0.08, 0.19, 0.17, 0.03, 0.17, 0.15, 0.29, 0.1, 0.18, 0.1, 0.07, 0.07, 0.11, 0.18, 0.04]
+    thres_list = [0.25, 0.35, 0.42, 0.2, 0.2, 0.41, 0.19, 0.2, 0.45, 0.09, 0.14, 0.12, 0.43, 0.25, 0.18, 0.28, 0.05] 
     args = Namespace(model_csv_train=model_csv_train, model_csv_test=model_csv_test, mode=mode, id=id,
                      thres_list=thres_list, csv_files=csv_files,chosen_weights_e=chosen_weights_e,chosen_weights_l=chosen_weights_l,first_run=first_run)
 
