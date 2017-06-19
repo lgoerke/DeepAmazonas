@@ -88,7 +88,7 @@ def create_csvs(args):
 
 
 if __name__ == '__main__':
-    mlist = ['simple_net_048','simple_net_068']
+    mlist = ['']
     # List with same size as mlist
     img_sizes = [64,64]
     args = Namespace(modellist=mlist, img_sizes = img_sizes)

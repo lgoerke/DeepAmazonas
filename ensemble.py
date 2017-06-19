@@ -28,7 +28,7 @@ def train_logistic(predictions_train, all_labels, id):
                                    (
                                    predictions_train.shape[0], predictions_train.shape[1] * predictions_train.shape[2]))
 
-    logistic = OneVsRestClassifier(LogisticRegression())
+    logistic = OneVsRestClassifier(LogisticRegression(),multilabel=True)
 
     print('Predictions train', predictions_train.shape)
     print('Labels train', all_labels.shape)
@@ -48,7 +48,7 @@ def train_logistic(predictions_train, all_labels, id):
     print(thres_opt)
 
     # save the model to disk
-    filename = 'logistic_regr.sav'
+    filename = 'logistic_regr_{}.sav'.format(id)
     pickle.dump(logistic, open(filename, 'wb'))
 
 def train_ensemble_full(predictions_train, all_labels, id):
@@ -405,12 +405,12 @@ if __name__ == '__main__':
     # mlist = []
     # img_sizes = []
     # csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
-    mode = 'network'
-    id = 'xgb_dense_nn3_before'
+    mode = 'regr'
+    id = 'xgb_dense_regr2'
     chosen_weights_e = '46'
     chosen_weights_l ='0.08'
-    first_run = False
-    use_condp = True
+    first_run = True
+    use_condp = False
     thres_list = [0.25, 0.35, 0.42, 0.2, 0.2, 0.41, 0.19, 0.2, 0.45, 0.09, 0.14, 0.12, 0.43, 0.25, 0.18, 0.28, 0.05] 
     args = Namespace(model_csv_train=model_csv_train, model_csv_test=model_csv_test, mode=mode, id=id,
                      thres_list=thres_list, csv_files=csv_files,chosen_weights_e=chosen_weights_e,chosen_weights_l=chosen_weights_l,first_run=first_run)
