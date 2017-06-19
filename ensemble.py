@@ -22,10 +22,14 @@ def train_ensemble(predictions_train, all_labels, id):
                                    (predictions_train.shape[0], predictions_train.shape[1] * predictions_train.shape[2]))
 
     model = Sequential()
-    model.add(Dense(1024, input_dim=(predictions_train.shape[1])))
-    model.add(Dense(17, activation='softmax'))
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.add(Dense(128, input_dim=(predictions_train.shape[1]), activation='relu'))
+    model.add(Dense(128, activation='relu'))
+    model.add(Dense(17, activation='sigmoid'))
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     print(model.summary())
+
+    print('Predictions train',predictions_train.shape)
+    print('Labels train', all_labels.shape)
 
     # define the checkpoint
     filepath = 'ensemble/weights_{epoch:02d}_{loss:.2f}.hdf5'
@@ -33,23 +37,24 @@ def train_ensemble(predictions_train, all_labels, id):
     callbacks_list = [checkpoint]
 
     # Fit the model
-    model.fit(predictions_train, all_labels, nb_epoch=100, batch_size=32, callbacks=callbacks_list)
+    model.fit(predictions_train,  np.array(all_labels), epochs=50, batch_size=32, callbacks=callbacks_list)
 
 
 def predict_with_ensemble(predictions_test,id,epoch,loss, mode='mean'):
     if mode == 'network':
         predictions_test = np.transpose(predictions_test, (1, 0, 2))
         predictions_test = np.reshape(predictions_test,
-                                      (predictions_test.shape[0], predictions_test[1] * predictions_test[2]))
+                                      (predictions_test.shape[0], predictions_test.shape[1] * predictions_test.shape[2]))
 
         model = Sequential()
-        model.add(Dense(1024, input_dim=(predictions_test.shape[1])))
-        model.add(Dense(17, activation='softmax'))
+        model.add(Dense(128, input_dim=(predictions_test.shape[1]), activation='relu'))
+        model.add(Dense(128, activation='relu'))
+        model.add(Dense(17, activation='sigmoid'))
 
         # define the checkpoint
         filepath = 'ensemble/weights_{}_{}_{}.hdf5'.format(id,epoch,loss)
         model.load_weights(filepath)
-        model.compile(optimizer='rmsprop', loss='categorical_crossentropy', metrics=['accuracy'])
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
         print(model.summary())
 
         predictions = model.predict(predictions_test)
@@ -87,6 +92,8 @@ def ensemble(args):
         pdf = pd.DataFrame(train_filenames, columns=['image_name'])
         ldf = pd.DataFrame(np.array(all_labels), columns=data.labels)
         labeldf = pd.concat([pdf, ldf], axis=1)
+        labeldf = labeldf.sort_values('image_name')
+        del labeldf['image_name']
 
         if model_csv_train:
 
@@ -136,7 +143,7 @@ def ensemble(args):
 
         if not first_run:
 
-            predictions = predict_with_ensemble(predictions_test,id, mode)
+            predictions = predict_with_ensemble(predictions_test,id,chosen_weights_e,chosen_weights_l, mode)
             result = pd.DataFrame(predictions, columns=data.labels)
 
             ## Check for reasonable distribution
@@ -300,10 +307,10 @@ if __name__ == '__main__':
     # img_sizes = []
     # csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
     mode = 'network'
-    id = 'xgb_dense_nn'
-    chosen_weights_e = ''
-    chosen_weights_l =''
-    first_run = True
+    id = 'xgb_dense_nn2'
+    chosen_weights_e = '49'
+    chosen_weights_l ='0.07'
+    first_run = False
     thres_opt = 0.6
     args = Namespace(model_csv_train=model_csv_train, model_csv_test=model_csv_test, mode=mode, id=id,
                      thres_opt=thres_opt, csv_files=csv_files,chosen_weights_e=chosen_weights_e,chosen_weights_l=chosen_weights_l,first_run=first_run)
