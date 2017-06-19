@@ -93,3 +93,14 @@ val_pred[val_pred > 0.2] = 1
 val_pred[val_pred < 1] = 0
 print(fbeta_score(s_weath_cond[30000:],val_pred,beta=2, average='samples'))
 
+test_jpg = glob.glob(in_path + 'test-jpg/*')
+test = pd.DataFrame([[p.split('/')[3].replace('.jpg',''),p] for p in test_jpg])
+test.columns = ['image_name','path']
+xtest = normalize_img(test['path']); print('test...')
+
+test_pred = etr.predict(xtest)
+test_pred[test_pred > 0.2] = 1
+test_pred[test_pred < 1] = 0
+
+
+
