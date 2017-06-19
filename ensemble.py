@@ -35,7 +35,7 @@ def train_logistic(predictions_train, all_labels, id):
 
     cutoff = int(len(predictions_train)*0.8)
 
-    logistic.fit(predictions_train[:cutoff,:], np.array(all_labels)[:cutoff,:])
+    logistic.fit(predictions_train[:cutoff,:], np.array(all_labels)[:cutoff,:],verbose=True)
     s = logistic.score(predictions_train[cutoff:, :], np.array(all_labels)[cutoff:, :])
     print('Score',s)
     print('validating')
