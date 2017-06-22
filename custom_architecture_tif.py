@@ -26,6 +26,8 @@ from sklearn.cross_validation import KFold
 from sklearn.metrics import fbeta_score
 import time
 
+from skimage import io
+
 x_train = []
 x_test = []
 y_train = []
@@ -72,20 +74,22 @@ label_map = {'agriculture': 14,
  'slash_burn': 8,
  'water': 15}
 
-resize_to = (64, 64)
+resize_to = (128, 128)
 
 for f, tags in tqdm(df_train.values, miniters=1000):
-    img = cv2.imread('./input/train-tif-v2/{}.tif'.format(f))
+    #img = cv2.imread('./input/train-tif-v2/{}.tif'.format(f))
+    img = io.imread('./input/train-tif-v2/{}.tif'.format(f))
     targets = np.zeros(17)
     for t in tags.split(' '):
         targets[label_map[t]] = 1 
-    x_train.append(cv2.resize(img, (64, 64)))
+    x_train.append(cv2.resize(img, resize_to))
     y_train.append(targets)
 
 
 for f, tags in tqdm(df_test.values, miniters=1000):
-    img = cv2.imread('./input/test-tif-v2/{}.tif'.format(f))
-    x_test.append(cv2.resize(img, (64, 64)))
+   # img = cv2.imread('./input/test-tif-v2/{}.tif'.format(f))
+    img = io.imread('./input/test-tif-v2/{}.tif'.format(f))
+    x_test.append(cv2.resize(img, resize_to))
     
 y_train = np.array(y_train, np.uint8)
 x_train = np.array(x_train, np.float32)/255.
@@ -120,7 +124,7 @@ for train_index, test_index in kf:
         kfold_weights_path = os.path.join('', 'weights_kfold_deeper' + str(num_fold) + '.h5')
         
         model = Sequential()
-        model.add(BatchNormalization(input_shape=(64, 64, 4)))
+        model.add(BatchNormalization(input_shape=(resize_to[0], resize_to[1], 4)))
         model.add(Conv2D(32, kernel_size=(3, 3),padding='same', activation='relu'))
         model.add(Conv2D(32, (3, 3), activation='relu'))
         model.add(MaxPooling2D(pool_size=(2, 2)))
@@ -147,9 +151,18 @@ for train_index, test_index in kf:
         model.add(MaxPooling2D(pool_size=(2, 2)))
         model.add(Dropout(0.25))
         
+        model.add(Conv2D(1024, kernel_size=(3, 3),padding='same', activation='relu'))
+        model.add(Conv2D(1024, (3, 3), activation='relu'))
+        model.add(MaxPooling2D(pool_size=(2, 2)))
+        model.add(Dropout(0.25))
+
+
+
+
+
         model.add(Flatten())
         #model.add(Dense(512, activation='relu'))
-        model.add(Dense(1024, activation='relu'))
+        model.add(Dense(2048, activation='relu'))
         model.add(BatchNormalization())
         model.add(Dropout(0.5))
         model.add(Dense(17, activation='sigmoid'))
@@ -162,7 +175,7 @@ for train_index, test_index in kf:
             model.compile(loss='binary_crossentropy', # We NEED binary here, since categorical_crossentropy l1 norms the output before calculating loss.
                           optimizer=opt,
                           metrics=['accuracy'])
-            callbacks = [EarlyStopping(monitor='val_loss', patience=2, verbose=0),
+            callbacks = [EarlyStopping(monitor='val_loss', patience=2, verbose=1),
             ModelCheckpoint(kfold_weights_path, monitor='val_loss', save_best_only=True, verbose=0)]
 
             model.fit(x = X_train, y= Y_train, validation_data=(X_valid, Y_valid),

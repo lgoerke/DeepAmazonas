@@ -15,12 +15,23 @@ from sklearn.metrics import fbeta_score
 from Classifiers.simple_net import SimpleNet
 from Classifiers.densenet import DenseNet
 
+def gen(reader,idx):
+    while(True):
+        for i in range(0,len(idx),100):
+            im, _, _ = reader.read_line_hdf(idx[i:i+100])
+            for img in im:
+                yield(img[None,...])
+        if i < len(idx):
+            im, _, _ = reader.read_line_hdf(idx[i:len(idx)])
+            for img in im:
+                yield(img[None,...])
+
 def main(args):
-    #size = 96
-    size = 224
-    #batch_size = 128
-    batch_size = 16
-    nb_epoch = 10
+    size = 64
+    #size = 224
+    batch_size = 128
+    #batch_size = 32
+    nb_epoch = 1
     optimizer = 'adam'
     val_split = 0.2
     N_CLASSES = 17
@@ -32,11 +43,11 @@ def main(args):
     channel = 3
 
 
-    labels = list(data.LABELS.keys())
+    labels = data.labels#list(data.LABELS.keys())
     cross_val = True
 
-    classifier = DenseNet(img_rows, img_cols, batch_size=batch_size, nb_epoch=nb_epoch, color_type=channel, num_classes=N_CLASSES)
-    #classifier = SimpleNet((size,size,3), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
+    #classifier = DenseNet(img_rows, img_cols, batch_size=batch_size, nb_epoch=nb_epoch, color_type=channel, num_classes=N_CLASSES)
+    classifier = SimpleNet((size,size,3), n_classes=N_CLASSES, nb_epoch = nb_epoch, batch_size=batch_size, optimizer=optimizer)
 
     splitter = Validation_splitter('input/train.h5', val_split)
     reader = HDF_line_reader('input/train.h5', load_rgb = False, img_size=size)
@@ -52,10 +63,13 @@ def main(args):
         classifier.fit(tg, vg, ((1-val_split) * N_SAMPLES, val_split * N_SAMPLES))
         
         print('validating')
-        p_valid = classifier.predict(vg, np.ceil(len(splitter.val_idx) / batch_size))
-        p_valid = p_valid[:len(splitter.val_idx)]
         idx = list(splitter.val_idx)
         idx.sort()
+                    
+        vg = gen(reader, idx)
+        #print(next(vg))
+        p_valid = classifier.predict(vg, len(splitter.val_idx))
+        p_valid = p_valid
         val_labels = reader.labels[idx]
 
         loss = fbeta_score(val_labels, np.array(p_valid) > 0.2, beta=2, average='samples')
@@ -68,11 +82,11 @@ def main(args):
         
         test_gen = data.test_generator(test_reader, test_batch_size)
         p_test = classifier.predict(test_gen, N_TEST // test_batch_size)
-        result += p_test[:N_TEST]
+        result += p_test
         
         cross_val = False 
 
-    result /= splitter.num_folds
+    #result /= splitter.num_folds
     result = pd.DataFrame(result, columns = labels)    
     
     preds = []
