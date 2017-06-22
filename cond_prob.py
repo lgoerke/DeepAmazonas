@@ -31,7 +31,23 @@ def cond_prob(args):
     reader = d.HDF_line_reader('input/train.h5', load_rgb=False)
     _, targets, file_ids = d.get_all_train(reader=reader)
     LABELS = d.LABELS
-    REV_LABELS = d.REV_LABELS
+    REV_LABELS = {0 : 'blow_down',
+          1: 'bare_ground',
+          2: 'conventional_mine',
+          3: 'blooming',
+          4: 'cultivation',
+          5: 'artisinal_mine',
+          6: 'haze',
+          7: 'primary',
+          8: 'slash_burn',
+          9: 'habitation',
+          10: 'clear',
+          11: 'road',
+          12: 'selective_logging',
+          13: 'partly_cloudy',
+          14: 'agriculture',
+          15: 'water',
+          16: 'cloudy'}
 
     df = pd.DataFrame(np.array(targets), columns=labels)
 

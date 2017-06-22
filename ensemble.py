@@ -26,44 +26,47 @@ def train_logistic(predictions_train, all_labels, id):
     predictions_train = np.transpose(predictions_train, (1, 0, 2))
     predictions_train = np.reshape(predictions_train,
                                    (
-                                   predictions_train.shape[0], predictions_train.shape[1] * predictions_train.shape[2]))
+                                       predictions_train.shape[0],
+                                       predictions_train.shape[1] * predictions_train.shape[2]))
 
     logistic = OneVsRestClassifier(LogisticRegression())
 
     print('Predictions train', predictions_train.shape)
     print('Labels train', all_labels.shape)
 
-    cutoff = int(len(predictions_train)*0.8)
+    cutoff = int(len(predictions_train) * 0.8)
 
-    logistic.fit(predictions_train[:cutoff,:], np.array(all_labels)[:cutoff,:])
+    logistic.fit(predictions_train[:cutoff, :], np.array(all_labels)[:cutoff, :])
     s = logistic.score(predictions_train[cutoff:, :], np.array(all_labels)[cutoff:, :])
-    print('Score',s)
+    print('Score', s)
     print('validating')
-    p_valid = logistic.predict_proba(predictions_train[cutoff:,:])
+    p_valid = logistic.predict_proba(predictions_train[cutoff:, :])
 
-    loss = fbeta_score(np.array(all_labels)[cutoff:,:], np.array(p_valid) > 0.23, beta=2, average='samples')
+    loss = fbeta_score(np.array(all_labels)[cutoff:, :], np.array(p_valid) > 0.23, beta=2, average='samples')
     print('validation loss: {}'.format(loss))
-    probas = logistic.predict_proba(predictions_train[cutoff:,:])
-    thres_opt = utils.optimise_f2_thresholds(np.array(all_labels)[cutoff:,:], probas)
+    probas = logistic.predict_proba(predictions_train[cutoff:, :])
+    thres_opt = utils.optimise_f2_thresholds(np.array(all_labels)[cutoff:, :], probas)
     print(thres_opt)
 
     # save the model to disk
     filename = 'logistic_regr.sav'
     pickle.dump(logistic, open(filename, 'wb'))
 
+
 def train_ensemble(predictions_train, all_labels, id):
     predictions_train = np.transpose(predictions_train, (1, 0, 2))
     predictions_train = np.reshape(predictions_train,
-                                   (predictions_train.shape[0], predictions_train.shape[1] * predictions_train.shape[2]))
+                                   (
+                                   predictions_train.shape[0], predictions_train.shape[1] * predictions_train.shape[2]))
 
     model = Sequential()
-    model.add(Dense(128, input_dim=(predictions_train.shape[1]), activation='relu'))
-    model.add(Dense(128, activation='relu'))
+    model.add(Dense(1024, input_dim=(predictions_train.shape[1]), activation='relu'))
+    model.add(Dense(1024, activation='relu'))
     model.add(Dense(17, activation='sigmoid'))
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     print(model.summary())
 
-    print('Predictions train',predictions_train.shape)
+    print('Predictions train', predictions_train.shape)
     print('Labels train', all_labels.shape)
 
     # define the checkpoint
@@ -72,14 +75,15 @@ def train_ensemble(predictions_train, all_labels, id):
     callbacks_list = [checkpoint]
 
     # Fit the model
-    model.fit(predictions_train,  np.array(all_labels), epochs=50, batch_size=32, callbacks=callbacks_list)
+    model.fit(predictions_train, np.array(all_labels), epochs=50, batch_size=32, callbacks=callbacks_list)
 
 
-def predict_with_ensemble(predictions_test,id,epoch,loss, mode='mean'):
+def predict_with_ensemble(predictions_test, id, epoch, loss, mode='mean'):
     if mode == 'network':
         predictions_test = np.transpose(predictions_test, (1, 0, 2))
         predictions_test = np.reshape(predictions_test,
-                                      (predictions_test.shape[0], predictions_test.shape[1] * predictions_test.shape[2]))
+                                      (
+                                      predictions_test.shape[0], predictions_test.shape[1] * predictions_test.shape[2]))
 
         model = Sequential()
         model.add(Dense(128, input_dim=(predictions_test.shape[1]), activation='relu'))
@@ -87,7 +91,7 @@ def predict_with_ensemble(predictions_test,id,epoch,loss, mode='mean'):
         model.add(Dense(17, activation='sigmoid'))
 
         # define the checkpoint
-        filepath = 'ensemble/weights_{}_{}_{}.hdf5'.format(id,epoch,loss)
+        filepath = 'ensemble/weights_{}_{}_{}.hdf5'.format(id, epoch, loss)
         model.load_weights(filepath)
         model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
         print(model.summary())
@@ -98,7 +102,8 @@ def predict_with_ensemble(predictions_test,id,epoch,loss, mode='mean'):
         predictions_test = np.transpose(predictions_test, (1, 0, 2))
         predictions_test = np.reshape(predictions_test,
                                       (
-                                      predictions_test.shape[0], predictions_test.shape[1] * predictions_test.shape[2]))
+                                          predictions_test.shape[0],
+                                          predictions_test.shape[1] * predictions_test.shape[2]))
         loaded_model = pickle.load(open('logistic_regr.sav', 'rb'))
         predictions = loaded_model.predict_proba(predictions_test)
     elif mode == "mean":
@@ -143,11 +148,11 @@ def ensemble(args):
         cp2flat = condp2.flatten()
         cp3flat = condp3.flatten()
 
-        cp2flat_train = np.repeat(np.reshape(cp2flat,(1,len(cp2flat))),40479, axis=0)
-        cp2flat_test = np.repeat(np.reshape(cp2flat,(1,len(cp2flat))),61191, axis=0)
+        cp2flat_train = np.repeat(np.reshape(cp2flat, (1, len(cp2flat))), 40479, axis=0)
+        cp2flat_test = np.repeat(np.reshape(cp2flat, (1, len(cp2flat))), 61191, axis=0)
 
-        cp3flat_train = np.repeat(np.reshape(cp3flat,(1,len(cp3flat))),40479, axis=0)
-        cp3flat_test = np.repeat(np.reshape(cp3flat,(1,len(cp3flat))),61191, axis=0)
+        cp3flat_train = np.repeat(np.reshape(cp3flat, (1, len(cp3flat))), 40479, axis=0)
+        cp3flat_test = np.repeat(np.reshape(cp3flat, (1, len(cp3flat))), 61191, axis=0)
 
         if model_csv_train:
 
@@ -162,21 +167,21 @@ def ensemble(args):
             test_files = tmpdf['image_name']
 
             for idx, mo in enumerate(model_csv_test):
-                print('Reading',idx,'model')
+                print('Reading', idx, 'model')
                 df = pd.read_csv(model_csv_train[idx])
                 df = df.sort_values('image_name')
                 del df['image_name']
                 if use_condp:
-                    predictions_train[idx, :, :] = np.concatenate([np.array(df), cp2flat_train, cp3flat_train],axis=1)
+                    predictions_train[idx, :, :] = np.concatenate([np.array(df), cp2flat_train, cp3flat_train], axis=1)
                 else:
-                    predictions_train[idx, : ,:] = df
+                    predictions_train[idx, :, :] = df
                 df.drop(df.index, inplace=True)
                 df = pd.read_csv(model_csv_test[idx])
                 del df['image_name']
                 if use_condp:
-                    predictions_test[idx, :, :] = np.concatenate([np.array(df), cp2flat_test, cp3flat_test],axis=1)
+                    predictions_test[idx, :, :] = np.concatenate([np.array(df), cp2flat_test, cp3flat_test], axis=1)
                 else:
-                    predictions_test[idx, : ,:] = df
+                    predictions_test[idx, :, :] = df
                 df.drop(df.index, inplace=True)
         else:
             reader = HDF_line_reader('input/test.h5', load_rgb=False)
@@ -186,11 +191,10 @@ def ensemble(args):
         if first_run:
 
             if mode == "network":
-                #assert isinstance(model_csv_train, object, "Network mode needs models")
+                # assert isinstance(model_csv_train, object, "Network mode needs models")
                 train_ensemble(predictions_train, labeldf, id)
             elif mode == "regr":
-                train_logistic(predictions_train,labeldf,id)
-
+                train_logistic(predictions_train, labeldf, id)
 
         if csv_files:
             if mode == "network":
@@ -210,7 +214,7 @@ def ensemble(args):
 
         if not first_run:
 
-            predictions = predict_with_ensemble(predictions_test,id,chosen_weights_e,chosen_weights_l, mode)
+            predictions = predict_with_ensemble(predictions_test, id, chosen_weights_e, chosen_weights_l, mode)
             result = pd.DataFrame(predictions, columns=data.labels)
 
             ## Check for reasonable distribution
@@ -289,12 +293,12 @@ def ensemble(args):
                 predictions_test[idx, :, :] = df
                 df.drop(df.index, inplace=True)
         else:
-            reader = HDF_line_reader('input/test.h5', load_rgb=False)
-            _, test_files = d.get_all_test(reader)
+            # reader = HDF_line_reader('input/test.h5', load_rgb=False)
+            # _, test_files = d.get_all_test(reader)
             predictions_test = np.zeros((0, 61191, 17))
 
         if mode == "network":
-            #assert isinstance(model_csv_train, object, "Network mode needs models")
+            # assert isinstance(model_csv_train, object, "Network mode needs models")
             train_ensemble(predictions_train, labeldf, id)
 
         if csv_files:
@@ -307,13 +311,14 @@ def ensemble(args):
                 for i, c in enumerate(csv_files):
                     df = pd.read_csv(c)
                     df.sort_values('image_name')
+                    test_files = df['image_name']
                     for j, row in enumerate(df['tags']):
                         predictions_csv[i, j, :] = data.to_one_hot(row)
             predictions_tmp[:predictions_test.shape[0], :, :] = predictions_test
             predictions_tmp[predictions_test.shape[0]:, :, :] = predictions_csv
             predictions_test = predictions_tmp
 
-        predictions = predict_with_ensemble(predictions_test,id, mode)
+        predictions = predict_with_ensemble(predictions_test, id,0, 0, mode)
         result = pd.DataFrame(predictions, columns=data.labels)
 
         ## Check for reasonable distribution
@@ -365,25 +370,32 @@ def ensemble(args):
 
 
 if __name__ == '__main__':
-    model_csv_train = ['ensemble/train_preds_dense.csv', 'ensemble/xgb_pred_probs_train.csv']
-    model_csv_test = ['ensemble/test_preds_dense.csv', 'ensemble/xgb_pred_probs_test.csv']
+    model_csv_train = []
+    model_csv_test = []
 
-    #'ensemble/vgg_pred_train.csv'
-    #'ensemble/vgg_pred_test.csv'
+    # model_csv_train = ['ensemble/train_preds_dense.csv', 'ensemble/xgb_pred_probs_train.csv',
+    #                    'ensemble/train_predictions_ricci.csv']
+    # model_csv_test = ['ensemble/test_preds_dense.csv', 'ensemble/xgb_pred_probs_test.csv',
+    #                   'ensemble/test_predictions_ricci.csv']
+
+    # 'ensemble/vgg_pred_train.csv'
+    # 'ensemble/vgg_pred_test.csv'
     # List with same size as mlist
-    csv_files = []
+    csv_files = ['input/submissions/subm1.csv', 'input/submissions/subm2.csv', 'input/submissions/subm3.csv', 'input/submissions/subm4.csv', 'input/submissions/subm5.csv',
+                 'input/submissions/subm6.csv', 'input/submissions/subm7.csv', 'input/submissions/subm8.csv', 'input/submissions/subm9.csv']
     # csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv']
     # mlist = []
     # img_sizes = []
     # csv_files = ['input/submissions/submission_1.csv', 'input/submissions/submission_blend.csv','input/submissions/subm_10fold_128.csv','input/submissions/submission_tiff.csv','input/submissions/submission_xgb.csv','input/submissions/submission_keras-2.csv']
-    mode = 'regr'
-    id = 'xgb_dense_regr'
+    mode = 'mean'
+    id = '9over90'
     chosen_weights_e = '49'
-    chosen_weights_l ='0.07'
+    chosen_weights_l = '0.07'
     first_run = True
-    use_condp = True
-    thres_list = [0.03, 0.08, 0.08, 0.19, 0.17, 0.03, 0.17, 0.15, 0.29, 0.1, 0.18, 0.1, 0.07, 0.07, 0.11, 0.18, 0.04]
+    use_condp = False
+    thres_list = [0.05, 0.06, 0.07, 0.19, 0.13, 0.03, 0.16, 0.19, 0.33, 0.12, 0.18, 0.13, 0.04, 0.09, 0.11, 0.19, 0.04]
     args = Namespace(model_csv_train=model_csv_train, model_csv_test=model_csv_test, mode=mode, id=id,
-                     thres_list=thres_list, csv_files=csv_files,chosen_weights_e=chosen_weights_e,chosen_weights_l=chosen_weights_l,first_run=first_run)
+                     thres_list=thres_list, csv_files=csv_files, chosen_weights_e=chosen_weights_e,
+                     chosen_weights_l=chosen_weights_l, first_run=first_run)
 
     ensemble(args)
