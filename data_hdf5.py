@@ -173,7 +173,7 @@ def train_generator(reader, splitter, batch_size):
         rotation_range=15,
         width_shift_range=0.2,
         height_shift_range=0.2,
-        shear_range=0.2,
+#        shear_range=0.2,
         zoom_range=0.2,
         horizontal_flip=True,
         vertical_flip=True,

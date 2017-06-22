@@ -29,14 +29,14 @@ def train_logistic(predictions_train, all_labels, id):
                                        predictions_train.shape[0],
                                        predictions_train.shape[1] * predictions_train.shape[2]))
 
-    logistic = OneVsRestClassifier(LogisticRegression())
+    logistic = OneVsRestClassifier(LogisticRegression(),multilabel=True)
 
     print('Predictions train', predictions_train.shape)
     print('Labels train', all_labels.shape)
 
     cutoff = int(len(predictions_train) * 0.8)
 
-    logistic.fit(predictions_train[:cutoff, :], np.array(all_labels)[:cutoff, :])
+    logistic.fit(predictions_train[:cutoff,:], np.array(all_labels)[:cutoff,:],verbose=True)
     s = logistic.score(predictions_train[cutoff:, :], np.array(all_labels)[cutoff:, :])
     print('Score', s)
     print('validating')
@@ -49,9 +49,29 @@ def train_logistic(predictions_train, all_labels, id):
     print(thres_opt)
 
     # save the model to disk
-    filename = 'logistic_regr.sav'
+    filename = 'logistic_regr_{}.sav'.format(id)
     pickle.dump(logistic, open(filename, 'wb'))
 
+def train_ensemble_full(predictions_train, all_labels, id):
+    predictions_train = np.transpose(predictions_train, (1, 0, 2))
+    predictions_train = np.reshape(predictions_train,
+                                   (predictions_train.shape[0], predictions_train.shape[1] * predictions_train.shape[2]))
+
+    model = Sequential()
+    model.add(Dense(128, input_dim=(predictions_train.shape[1]), activation='relu'))
+    model.add(Dense(128, activation='relu'))
+    model.add(Dense(17, activation='sigmoid'))
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    print(model.summary())
+
+    print('Predictions train',predictions_train.shape)
+    print('Labels train', all_labels.shape)
+
+    # define the checkpoint
+    filepath = 'ensemble/weights_{epoch:02d}_{loss:.2f}.hdf5'
+    checkpoint = ModelCheckpoint(filepath, monitor='loss', save_best_only=True, verbose=1)
+    callbacks_list = [checkpoint]
+    model.fit(predictions_train,  np.array(all_labels), epochs=50, batch_size=32, callbacks=callbacks_list)
 
 def train_ensemble(predictions_train, all_labels, id):
     predictions_train = np.transpose(predictions_train, (1, 0, 2))
@@ -74,9 +94,17 @@ def train_ensemble(predictions_train, all_labels, id):
     checkpoint = ModelCheckpoint(filepath, monitor='loss', save_best_only=True, verbose=1)
     callbacks_list = [checkpoint]
 
+    cutoff = int(len(predictions_train)*0.8)
     # Fit the model
-    model.fit(predictions_train, np.array(all_labels), epochs=50, batch_size=32, callbacks=callbacks_list)
+    model.fit(predictions_train[:cutoff,:],  np.array(all_labels)[:cutoff,:], epochs=50, batch_size=32, callbacks=callbacks_list)
 
+    p_valid = model.predict(predictions_train[cutoff:,:])
+
+    loss = fbeta_score(np.array(all_labels)[cutoff:,:], np.array(p_valid) > 0.2, beta=2, average='samples')
+    print('validation loss: {}'.format(loss))
+    probas = model.predict(predictions_train[cutoff:,:])
+    thres_opt = utils.optimise_f2_thresholds(np.array(all_labels)[cutoff:,:], probas)
+    print(thres_opt)
 
 def predict_with_ensemble(predictions_test, id, epoch, loss, mode='mean'):
     if mode == 'network':
